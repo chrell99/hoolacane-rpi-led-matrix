@@ -45,3 +45,5 @@ board. Ensure this is set in the "P3 chain" state to allow 3 parallel chains.
 |`--led-pixel-mapper="Rotate:90"`    | The rotation of the display in degrees. Has to be multiple of 90.|
 
 The settings depend on the sign but the above is what will work for this project. 
+
+This is a test to test the commits from the rasp pi
