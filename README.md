@@ -35,6 +35,16 @@ git clone git@github.com:chrell99/hoolacane-rpi-led-matrix.git
 <br/><br/>
 ### First compile and run
 
+Before you can run anything, you need to make sure the snd_bcm2835 module has been disabled. You can do this by running the following two commands:
+(The first three lines are together and then afterwards run the last line.)
+```
+cat <<EOF | sudo tee /etc/modprobe.d/blacklist-rgb-matrix.conf
+blacklist snd_bcm2835
+EOF
+
+sudo update-initramfs -u
+```
+
 Once you've cloned the git repository to the raspberry Pi, you can run the following command in the top folder:
 ```
 sudo make -C examples-api-use
