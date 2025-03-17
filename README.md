@@ -44,6 +44,11 @@ EOF
 
 sudo update-initramfs -u
 ```
+It is also recommended from the original repository to allocate a core to run the timing on the panels. This can be done by adding
+```
+isolcpus=3
+```
+to the `boot/firmware/cmdline.txt` file, on the same line as the rest.
 
 Once you've cloned the git repository to the raspberry Pi, you can run the following command in the top folder:
 ```
