@@ -4,7 +4,7 @@ CXXFLAGS = -Wall -O3 -g -Wextra -Wno-unused-parameter -I../include
 LDFLAGS = -L../lib -lrgbmatrix -lrt -lm -lpthread
 
 # Source Files
-SOURCES = minimal-example.cc
+SOURCES = minimal-example.cc sound-test.cc
 EXECUTABLES = $(SOURCES:.cc=)
 
 # Default Target: Build All Executables
