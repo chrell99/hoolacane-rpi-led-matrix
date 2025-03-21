@@ -37,13 +37,19 @@ static void DrawOnCanvas(Canvas *canvas) {
 }
 
 int main(int argc, char *argv[]) {
-  RGBMatrix::Options defaults;
-  defaults.hardware_mapping = "regular";  // or e.g. "adafruit-hat"
-  defaults.rows = 32;
-  defaults.chain_length = 1;
-  defaults.parallel = 1;
-  defaults.show_refresh_rate = true;
-  Canvas *canvas = RGBMatrix::CreateFromFlags(&argc, &argv, &defaults);
+  RGBMatrix::Options options;
+  options.hardware_mapping = "regular";  // or e.g. "adafruit-hat"
+  options.rows = 32;
+  options.chain_length = 3;
+  options.parallel = 3;
+  options.show_refresh_rate = true;
+  options.multiplexing = 1;
+
+  rgb_matrix::RuntimeOptions rOptions;
+  rOptions.gpio_slowdown = 2;
+  
+  Canvas *canvas = RGBMatrix::CreateFromOptions(options, rOptions);
+
   if (canvas == NULL)
     return 1;
 
