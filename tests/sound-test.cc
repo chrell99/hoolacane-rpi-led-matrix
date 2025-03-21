@@ -81,7 +81,7 @@ int main() {
         double rms_amplitude = std::sqrt(sum / frames);
 
         // Output the RMS amplitude
-        std::cout << "Amplitude (RMS): " << rms_amplitude << std::endl;
+        std::cout << "Amplitude (RMS): " << rms_amplitude << std::flush;
     }
 
     // Close the PCM device
