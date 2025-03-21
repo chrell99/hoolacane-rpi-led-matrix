@@ -1,102 +1,90 @@
 #include <iostream>
 #include <alsa/asoundlib.h>
 #include <cmath>
-#include <cstdlib>
-#include <csignal>  // For signal handling
+#include <vector>
 
-using namespace std;
-
-#define PCM_DEVICE "default"
-#define BUFFER_SIZE 1024
-#define SAMPLE_RATE 44100
-#define CHANNELS 1
-#define FORMAT SND_PCM_FORMAT_S16_LE
-
-snd_pcm_t *pcm_handle = nullptr;  // Global variable for PCM handle
-short *buffer = nullptr;          // Global buffer
-
-// Signal handler for SIGINT (Ctrl+C)
-void handle_sigint(int sig) {
-    cout << "\nCaught signal " << sig << ", cleaning up and exiting..." << endl;
-    if (buffer) {
-        free(buffer);
-    }
-    if (pcm_handle) {
-        snd_pcm_close(pcm_handle);
-    }
-    exit(0);  // Exit gracefully
-}
+#define PCM_DEVICE "hw:0,0"  // Default device (change if necessary)
 
 int main() {
-    // Set up signal handling for SIGINT (Ctrl+C)
-    signal(SIGINT, handle_sigint);
-
+    snd_pcm_t *pcm_handle;
     snd_pcm_hw_params_t *params;
-    int err;
+    snd_pcm_format_t format = SND_PCM_FORMAT_S16_LE;  // 16-bit little-endian signed samples
+    unsigned int rate = 44100;  // 44.1 kHz sample rate (CD quality)
+    int channels = 1;  // Mono channel
+    int buffer_size = 1024;  // Buffer size (number of frames)
 
-    // Open the PCM device for capture
-    err = snd_pcm_open(&pcm_handle, PCM_DEVICE, SND_PCM_STREAM_CAPTURE, 0);
-    if (err < 0) {
-        cerr << "ERROR: Unable to open PCM device: " << snd_strerror(err) << endl;
+    // Open PCM device for recording
+    if (snd_pcm_open(&pcm_handle, PCM_DEVICE, SND_PCM_STREAM_CAPTURE, 0) < 0) {
+        std::cerr << "Failed to open PCM device" << std::endl;
         return -1;
     }
 
+    // Allocate hardware parameters object
     snd_pcm_hw_params_alloca(&params);
 
-    err = snd_pcm_hw_params_any(pcm_handle, params);
-    if (err < 0) {
-        cerr << "ERROR: Unable to set parameters: " << snd_strerror(err) << endl;
+    // Initialize hardware parameters
+    if (snd_pcm_hw_params_any(pcm_handle, params) < 0) {
+        std::cerr << "Failed to initialize hardware parameters" << std::endl;
         return -1;
     }
 
-    err = snd_pcm_hw_params_set_format(pcm_handle, params, FORMAT);
-    if (err < 0) {
-        cerr << "ERROR: Unable to set format: " << snd_strerror(err) << endl;
+    // Set the desired hardware parameters
+    if (snd_pcm_hw_params_set_access(pcm_handle, params, SND_PCM_ACCESS_RW_INTERLEAVED) < 0) {
+        std::cerr << "Failed to set access type" << std::endl;
         return -1;
     }
 
-    err = snd_pcm_hw_params_set_rate_near(pcm_handle, params, &SAMPLE_RATE, 0);
-    if (err < 0) {
-        cerr << "ERROR: Unable to set rate: " << snd_strerror(err) << endl;
+    if (snd_pcm_hw_params_set_format(pcm_handle, params, format) < 0) {
+        std::cerr << "Failed to set format" << std::endl;
         return -1;
     }
 
-    err = snd_pcm_hw_params_set_channels(pcm_handle, params, CHANNELS);
-    if (err < 0) {
-        cerr << "ERROR: Unable to set channels: " << snd_strerror(err) << endl;
+    if (snd_pcm_hw_params_set_rate_near(pcm_handle, params, &rate, 0) < 0) {
+        std::cerr << "Failed to set sample rate" << std::endl;
         return -1;
     }
 
-    err = snd_pcm_hw_params(pcm_handle, params);
-    if (err < 0) {
-        cerr << "ERROR: Unable to set parameters: " << snd_strerror(err) << endl;
+    if (snd_pcm_hw_params_set_channels(pcm_handle, params, channels) < 0) {
+        std::cerr << "Failed to set channels" << std::endl;
         return -1;
     }
 
-    buffer = (short *)malloc(BUFFER_SIZE * sizeof(short));
+    // Apply the hardware parameters
+    if (snd_pcm_hw_params(pcm_handle, params) < 0) {
+        std::cerr << "Failed to apply hardware parameters" << std::endl;
+        return -1;
+    }
+
+    // Prepare PCM device for capturing
+    if (snd_pcm_prepare(pcm_handle) < 0) {
+        std::cerr << "Failed to prepare PCM device" << std::endl;
+        return -1;
+    }
+
+    // Create a buffer to hold the audio samples
+    std::vector<short> buffer(buffer_size);
 
     while (true) {
-        err = snd_pcm_readi(pcm_handle, buffer, BUFFER_SIZE);
-        if (err == -EPIPE) {
-            cerr << "Buffer Underrun!" << endl;
-            snd_pcm_prepare(pcm_handle);
-        } else if (err < 0) {
-            cerr << "ERROR: Read failed: " << snd_strerror(err) << endl;
+        // Read samples from the sound card
+        int frames = snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
+        if (frames < 0) {
+            std::cerr << "Error reading audio data" << std::endl;
             break;
         }
 
-        // Calculate the amplitude
-        double amplitude = 0;
-        for (int i = 0; i < BUFFER_SIZE; i++) {
-            amplitude += std::abs(buffer[i]);
+        // Calculate the RMS (Root Mean Square) amplitude of the audio buffer
+        double sum = 0.0;
+        for (int i = 0; i < frames; ++i) {
+            sum += buffer[i] * buffer[i];
         }
 
-        amplitude /= BUFFER_SIZE;  // Get average amplitude
+        double rms_amplitude = std::sqrt(sum / frames);
 
-        cout << "Amplitude: " << amplitude << endl;
+        // Output the RMS amplitude
+        std::cout << "Amplitude (RMS): " << rms_amplitude << std::endl;
     }
 
-    free(buffer);
+    // Close the PCM device
     snd_pcm_close(pcm_handle);
     return 0;
 }
