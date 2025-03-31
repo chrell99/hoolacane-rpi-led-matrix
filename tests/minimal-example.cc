@@ -22,12 +22,11 @@ static void InterruptHandler(int signo) {
   interrupt_received = true;
 }
 
-uint64_t micros()
-{
-    uint64_t us = std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::high_resolution_clock::now().time_since_epoch())
-            .count();
-    return us; 
+uint64_t micros() {
+  static auto start_time = std::chrono::steady_clock::now();
+  auto now = std::chrono::steady_clock::now();
+  
+  return std::chrono::duration_cast<std::chrono::microseconds>(now - start_time).count();
 }
 
 
@@ -50,7 +49,7 @@ static void DrawOnCanvas(Canvas *canvas) {
 
 
 int main(int argc, char *argv[]) {
-  std::cout << "TIMESTAMP 1" << micros() << std::endl;
+  std::cout << "TIMESTAMP 1: " << micros() << std::endl;
   RGBMatrix::Options options;
   options.hardware_mapping = "regular";  // or e.g. "adafruit-hat"
   options.rows = 32;
@@ -62,11 +61,11 @@ int main(int argc, char *argv[]) {
   rgb_matrix::RuntimeOptions rOptions;
   rOptions.gpio_slowdown = 2;
   
-  std::cout << "TIMESTAMP 2" << micros() << std::endl;
+  std::cout << "TIMESTAMP 2: " << micros() << std::endl;
   
-  Canvas *canvas = RGBMatrix::CreateFromOptions(options, rOptions);
+  RGBMatrix* canvas = RGBMatrix::CreateFromOptions(options, rOptions);
 
-  std::cout << "TIMESTAMP 3" << micros() << std::endl;
+  std::cout << "TIMESTAMP 3: " << micros() << std::endl;
 
   if (canvas == NULL)
     return 1;
@@ -76,7 +75,12 @@ int main(int argc, char *argv[]) {
   // for that.
   signal(SIGTERM, InterruptHandler);
   signal(SIGINT, InterruptHandler);
-  std::cout << "TIMESTAMP 4" << micros() << std::endl;
+  std::cout << "TIMESTAMP 4: " << micros() << std::endl;
+
+  canvas->SetBrightness(50);
+
+  std::cout << "TIMESTAMP 5: " << micros() << std::endl;
+
   DrawOnCanvas(canvas);    // Using the canvas.
 
   // Animation finished. Shut down the RGB matrix.
