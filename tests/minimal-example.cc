@@ -11,6 +11,8 @@
 #include <math.h>
 #include <stdio.h>
 #include <signal.h>
+#include <iostream>
+#include <chrono>
 
 using rgb_matrix::RGBMatrix;
 using rgb_matrix::Canvas;
@@ -19,6 +21,15 @@ volatile bool interrupt_received = false;
 static void InterruptHandler(int signo) {
   interrupt_received = true;
 }
+
+uint64_t micros()
+{
+    uint64_t us = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::high_resolution_clock::now().time_since_epoch())
+            .count();
+    return us; 
+}
+
 
 static void DrawOnCanvas(Canvas *canvas) {
   /*
@@ -36,19 +47,26 @@ static void DrawOnCanvas(Canvas *canvas) {
   }
 }
 
+
+
 int main(int argc, char *argv[]) {
+  std::cout << "TIMESTAMP 1" << micros() << std::endl;
   RGBMatrix::Options options;
   options.hardware_mapping = "regular";  // or e.g. "adafruit-hat"
   options.rows = 32;
   options.chain_length = 3;
   options.parallel = 3;
-  options.show_refresh_rate = true;
+  options.show_refresh_rate = false;
   options.multiplexing = 1;
 
   rgb_matrix::RuntimeOptions rOptions;
   rOptions.gpio_slowdown = 2;
   
+  std::cout << "TIMESTAMP 2" << micros() << std::endl;
+  
   Canvas *canvas = RGBMatrix::CreateFromOptions(options, rOptions);
+
+  std::cout << "TIMESTAMP 3" << micros() << std::endl;
 
   if (canvas == NULL)
     return 1;
@@ -58,7 +76,7 @@ int main(int argc, char *argv[]) {
   // for that.
   signal(SIGTERM, InterruptHandler);
   signal(SIGINT, InterruptHandler);
-
+  std::cout << "TIMESTAMP 4" << micros() << std::endl;
   DrawOnCanvas(canvas);    // Using the canvas.
 
   // Animation finished. Shut down the RGB matrix.
