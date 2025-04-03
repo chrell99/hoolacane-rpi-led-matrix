@@ -3,7 +3,7 @@
 #include <cmath>
 #include <vector>
 
-#define PCM_DEVICE "hw:0,0"  // Default device (change if necessary)
+#define PCM_DEVICE "hw:1,0"  // Default device (change if necessary)
 
 int main() {
     snd_pcm_t *pcm_handle;
