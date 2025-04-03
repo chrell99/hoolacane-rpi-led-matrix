@@ -3,12 +3,21 @@
 #include <cmath>
 #include <vector>
 #include <fftw3.h>
+#include <iostream>
+#include <chrono>
 
 #define PCM_DEVICE "hw:1,0"  // USB Dongle audio input
 #define SAMPLE_RATE 44100    // 44.1 kHz sample rate
 #define BUFFER_SIZE 1024     // FFT buffer size (must be power of 2)
 
 // g++ fft_audio.cpp -o fft_audio -lfftw3 -lasound -lmæ
+
+uint64_t micros() {
+    static auto start_time = std::chrono::steady_clock::now();
+    auto now = std::chrono::steady_clock::now();
+
+    return std::chrono::duration_cast<std::chrono::microseconds>(now - start_time).count();
+}
 
 // Function to compute FFT and print frequency bins and amplitudes
 void computeFFT(std::vector<short>& buffer) {
@@ -32,14 +41,15 @@ void computeFFT(std::vector<short>& buffer) {
     // Execute FFT
     fftw_execute(plan);
 
-    // Print frequency bins and amplitudes
-    std::cout << "\nFFT Results:\n";
-    for (int i = 0; i < 60; i++) {  
-        double frequency = (double)i * SAMPLE_RATE / N;
-        double magnitude = sqrt(out[i][0] * out[i][0] + out[i][1] * out[i][1]);
+    std::cout << "\r";
 
-        std::cout << "B " << i << " | F: " << frequency << " Hz | A: " << magnitude << std::endl;
+    // Print amplitude values aligned with the frequency labels
+    for (int i = 9; i < 15; i++) {  // Match spacing of frequency labels
+        double magnitude = sqrt(out[i][0] * out[i][0] + out[i][1] * out[i][1]);
+        std::cout << std::setw(10) << (int)magnitude;
     }
+
+    std::cout << std::flush;
 
     // Cleanup
     fftw_destroy_plan(plan);
@@ -78,6 +88,12 @@ int main() {
     }
 
     std::vector<short> buffer(buffer_size);
+    std::cout << "\n";
+    for (int i = 9; i < 15; i++) {
+        double frequency = (double)i * SAMPLE_RATE / BUFFER_SIZE;
+        std::cout << std::setw(10) << frequency << " Hz";
+    }
+    std::cout << "\n";
 
     while (true) {
         int frames = snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
@@ -85,7 +101,9 @@ int main() {
             std::cerr << "Error reading audio data" << std::endl;
             break;
         }
+        //std::cout << "Before: " << micros() << std::endl;
         computeFFT(buffer);
+        //std::cout << "After: " << micros() << std::endl;
     }
 
     snd_pcm_close(pcm_handle);
