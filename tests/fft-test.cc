@@ -8,7 +8,7 @@
 #define SAMPLE_RATE 44100    // 44.1 kHz sample rate
 #define BUFFER_SIZE 1024     // FFT buffer size (must be power of 2)
 
-// g++ fft_audio.cpp -o fft_audio -lfftw3 -lasound -lm
+// g++ fft_audio.cpp -o fft_audio -lfftw3 -lasound -lmæ
 
 // Function to compute FFT and print frequency bins and amplitudes
 void computeFFT(std::vector<short>& buffer) {
@@ -34,11 +34,11 @@ void computeFFT(std::vector<short>& buffer) {
 
     // Print frequency bins and amplitudes
     std::cout << "\nFFT Results:\n";
-    for (int i = 0; i < N / 2; i++) {  // Only first half due to Nyquist theorem
+    for (int i = 0; i < 60; i++) {  
         double frequency = (double)i * SAMPLE_RATE / N;
         double magnitude = sqrt(out[i][0] * out[i][0] + out[i][1] * out[i][1]);
 
-        std::cout << "Bin " << i << " | Frequency: " << frequency << " Hz | Amplitude: " << magnitude << std::endl;
+        std::cout << "B " << i << " | F: " << frequency << " Hz | A: " << magnitude << std::endl;
     }
 
     // Cleanup
