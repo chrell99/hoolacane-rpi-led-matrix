@@ -20,7 +20,7 @@ uint64_t micros() {
     return std::chrono::duration_cast<std::chrono::microseconds>(now - start_time).count();
 }
 
-// Function to compute FFT and print frequency bins and amplitudes
+// Function to compute FFT and print frequency bins and amplitude
 void computeFFT(std::vector<short>& buffer) {
     int N = BUFFER_SIZE;
     fftw_complex *in, *out;
@@ -47,7 +47,7 @@ void computeFFT(std::vector<short>& buffer) {
     // Print amplitude values aligned with the frequency labels
     for (int i = 9; i < 15; i++) {  // Match spacing of frequency labels
         double magnitude = sqrt(out[i][0] * out[i][0] + out[i][1] * out[i][1]);
-        std::cout << std::setw(10) << (int)magnitude;
+        std::cout << std::setw(10) << (int)magnitude << "   ";
     }
 
     std::cout << std::flush;
@@ -89,10 +89,9 @@ int main() {
     }
 
     std::vector<short> buffer(buffer_size);
-    std::cout << "\n";
     for (int i = 9; i < 15; i++) {
         double frequency = (double)i * SAMPLE_RATE / BUFFER_SIZE;
-        std::cout << std::setw(10) << frequency << " Hz";
+        std::cout << std::setw(10) << (int)frequency << " Hz";
     }
     std::cout << "\n";
 
