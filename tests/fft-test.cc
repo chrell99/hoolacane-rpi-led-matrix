@@ -5,6 +5,7 @@
 #include <fftw3.h>
 #include <iostream>
 #include <chrono>
+#include <iomanip> 
 
 #define PCM_DEVICE "hw:1,0"  // USB Dongle audio input
 #define SAMPLE_RATE 44100    // 44.1 kHz sample rate
