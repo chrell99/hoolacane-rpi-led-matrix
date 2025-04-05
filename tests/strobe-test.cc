@@ -145,7 +145,7 @@ int main(int argc, char *argv[]){
     while (true) {
         snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
         amplitude = computeFFT(buffer);
-        if(amplitude > argv[1]){
+        if(amplitude > std::stod(argv[1])){
             matrix->Fill(255, 255, 255);
         }
         else{
