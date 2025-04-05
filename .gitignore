@@ -11,3 +11,4 @@
 # python
 __pycache__/
 .vscode
+/tests/*
