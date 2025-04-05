@@ -15,6 +15,13 @@
 #define PCM_DEVICE "hw:1,0" // USB Dongle audio input
 #define SAMPLE_RATE 44100   // 44.1 kHz sample rate
 #define BUFFER_SIZE 1024    // FFT buffer size (must be power of 2)
+/* Freq bins are calculated with the sample rate divided by the buffer size:
+
+    44100 / 2048 = 21.53Hz
+    44100 / 1024 = 43.07Hz
+    44100 / 512  = 86.13Hz
+
+*/
 
 using rgb_matrix::Canvas;
 using rgb_matrix::RGBMatrix;
@@ -58,8 +65,7 @@ int configure_pcm_device(snd_pcm_t *&pcm_handle, snd_pcm_hw_params_t *&params,
     return 0; 
 }
 
-
-void computeFFT(std::vector<short>& buffer) {
+double computeFFT(std::vector<short>& buffer) {
     int N = BUFFER_SIZE;
     fftw_complex *in, *out;
     fftw_plan plan;
@@ -78,16 +84,19 @@ void computeFFT(std::vector<short>& buffer) {
 
     fftw_execute(plan);
 
-    // Print amplitude values aligned with the frequency labels
+    /*// Print amplitude values aligned with the frequency labels
     for (int i = 9; i < 15; i++) {  // Match spacing of frequency labels
         double magnitude = sqrt(out[i][0] * out[i][0] + out[i][1] * out[i][1]);
         std::cout << std::setw(10) << (int)magnitude << "   ";
-    }
+    }*/
 
     // Cleanup
     fftw_destroy_plan(plan);
     fftw_free(in);
     fftw_free(out);
+
+    // 12 * 43.07Hz = 516Hz
+    return sqrt(out[12][0] * out[12][0] + out[12][1] * out[12][1]);
 }
 
 static void FillCanvasDuration(Canvas *canvas, int time_in_ms) {
@@ -118,22 +127,31 @@ int main(int argc, char *argv[]){
     options.multiplexing = 1;
     rgb_matrix::RuntimeOptions rOptions;
     rOptions.gpio_slowdown = 2;
-
+    RGBMatrix *matrix = RGBMatrix::CreateFromOptions(options, rOptions);
+    canvas->SetBrightness(50);
 
 
     if (configure_pcm_device(pcm_handle, params, format, rate, channels, buffer_size) < 0) {
         return -1; 
     }
 
-    RGBMatrix *canvas = RGBMatrix::CreateFromOptions(options, rOptions);
-    canvas->SetBrightness(50);
+    
+    std::vector<short> buffer(buffer_size);
+    double amplitude;
 
-    FillCanvasDuration(canvas, 1000);
+    while (true) {
+        snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
+        amplitude = computeFFT(buffer);
+        if(amplitude > 150000){
+            canvas->Fill(255, 255, 255);
+        }
+        else{
+            canvas->Fill(0, 0, 0);
+        }
 
-    for (int i = 0; i < argc; ++i)
-    {
-        std::cout << "Argument " << i << ": " << argv[i] << std::endl;
     }
+
+
 
     if (canvas == NULL)
         return 1;
