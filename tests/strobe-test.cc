@@ -128,7 +128,7 @@ int main(int argc, char *argv[]){
     rgb_matrix::RuntimeOptions rOptions;
     rOptions.gpio_slowdown = 2;
     RGBMatrix *matrix = RGBMatrix::CreateFromOptions(options, rOptions);
-    canvas->SetBrightness(50);
+    matrix->SetBrightness(50);
 
 
     if (configure_pcm_device(pcm_handle, params, format, rate, channels, buffer_size) < 0) {
@@ -143,10 +143,10 @@ int main(int argc, char *argv[]){
         snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
         amplitude = computeFFT(buffer);
         if(amplitude > 150000){
-            canvas->Fill(255, 255, 255);
+            matrix->Fill(255, 255, 255);
         }
         else{
-            canvas->Fill(0, 0, 0);
+            matrix->Fill(0, 0, 0);
         }
 
     }
