@@ -108,13 +108,17 @@ static void FillCanvasDuration(Canvas *canvas, int time_in_ms) {
 
 int main(int argc, char *argv[]){
 
-    //************ SOUND VARS **************/
+    //************ SOUND INIT **************/
     snd_pcm_t *pcm_handle;
     snd_pcm_hw_params_t *params;
     snd_pcm_format_t format = SND_PCM_FORMAT_S16_LE;
     unsigned int rate = SAMPLE_RATE;
     int channels = 1;
     int buffer_size = BUFFER_SIZE;
+
+    if (configure_pcm_device(pcm_handle, params, format, rate, channels, buffer_size) < 0) {
+        return -1; 
+    }
 
     //************ RGB MATRIX VARS **************/
     RGBMatrix::Options options;
@@ -127,13 +131,9 @@ int main(int argc, char *argv[]){
     options.multiplexing = 1;
     rgb_matrix::RuntimeOptions rOptions;
     rOptions.gpio_slowdown = 2;
+
     RGBMatrix *matrix = RGBMatrix::CreateFromOptions(options, rOptions);
     matrix->SetBrightness(50);
-
-
-    if (configure_pcm_device(pcm_handle, params, format, rate, channels, buffer_size) < 0) {
-        return -1; 
-    }
 
     
     std::vector<short> buffer(buffer_size);
