@@ -153,10 +153,10 @@ int main(int argc, char *argv[]){
 
 
 
-    if (canvas == NULL)
+    if (matrix == NULL)
         return 1;
 
-    canvas->Clear();
-    delete canvas;
+    matrix->Clear();
+    delete matrix;
     return 0;
 }
