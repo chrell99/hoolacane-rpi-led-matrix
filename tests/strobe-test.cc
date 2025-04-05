@@ -54,8 +54,47 @@ int configure_pcm_device(snd_pcm_t *&pcm_handle, snd_pcm_hw_params_t *&params,
         return -1; 
     }
 
-    std::out << "Succesfully opened the PCM device" << std:endl;
+    std::cout << "Succesfully opened the PCM device" << std::endl;
     return 0; 
+}
+
+
+void computeFFT(std::vector<short>& buffer) {
+    int N = BUFFER_SIZE;
+    fftw_complex *in, *out;
+    fftw_plan plan;
+
+    // Allocate FFT input and output arrays
+    in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
+    out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
+    
+    plan = fftw_plan_dft_1d(N, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
+
+    // Allocate the input data to the FFTW in buffer
+    for (int i = 0; i < N; i++) {
+        in[i][0] = buffer[i];  
+        in[i][1] = 0.0;        
+    }
+
+    fftw_execute(plan);
+
+    // Print amplitude values aligned with the frequency labels
+    for (int i = 9; i < 15; i++) {  // Match spacing of frequency labels
+        double magnitude = sqrt(out[i][0] * out[i][0] + out[i][1] * out[i][1]);
+        std::cout << std::setw(10) << (int)magnitude << "   ";
+    }
+
+    // Cleanup
+    fftw_destroy_plan(plan);
+    fftw_free(in);
+    fftw_free(out);
+}
+
+static void FillCanvasDuration(Canvas *canvas, int time_in_ms) {
+    canvas->Fill(255, 255, 255);
+    usleep(time_in_ms * 1000); 
+    canvas->Fill(0, 0, 0);
+    return;
 }
 
 int main(int argc, char *argv[]){
@@ -72,6 +111,7 @@ int main(int argc, char *argv[]){
     RGBMatrix::Options options;
     options.hardware_mapping = "regular";
     options.rows = 32;
+    options.cols = 32;
     options.chain_length = 3;
     options.parallel = 3;
     options.show_refresh_rate = false;
@@ -79,12 +119,16 @@ int main(int argc, char *argv[]){
     rgb_matrix::RuntimeOptions rOptions;
     rOptions.gpio_slowdown = 2;
 
+
+
     if (configure_pcm_device(pcm_handle, params, format, rate, channels, buffer_size) < 0) {
         return -1; 
     }
 
     RGBMatrix *canvas = RGBMatrix::CreateFromOptions(options, rOptions);
     canvas->SetBrightness(50);
+
+    FillCanvasDuration(canvas, 1000);
 
     for (int i = 0; i < argc; ++i)
     {
