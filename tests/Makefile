@@ -1,10 +1,10 @@
 # Compiler and Flags
 CXX = g++
 CXXFLAGS = -Wall -O3 -g -Wextra -Wno-unused-parameter -I../include
-LDFLAGS = -L../lib -lrgbmatrix -lrt -lm -lpthread
+LDFLAGS = -L../lib -lrgbmatrix -lrt -lm -lpthread -lfftw3 -lasound
 
 # Source Files
-SOURCES = minimal-example.cc
+SOURCES = minimal-example.cc strobe-test.cc sound-test.cc fft-test.cc
 EXECUTABLES = $(SOURCES:.cc=)
 
 # Default Target: Build All Executables
