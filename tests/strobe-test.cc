@@ -84,11 +84,15 @@ double computeFFT(std::vector<short>& buffer) {
 
     fftw_execute(plan);
 
-    /*// Print amplitude values aligned with the frequency labels
+    std::cout << "\r";
+
+    // Print amplitude values aligned with the frequency labels
     for (int i = 9; i < 15; i++) {  // Match spacing of frequency labels
         double magnitude = sqrt(out[i][0] * out[i][0] + out[i][1] * out[i][1]);
         std::cout << std::setw(10) << (int)magnitude << "   ";
-    }*/
+    }
+
+    std::cout << std::flush;
 
     // Cleanup
     fftw_destroy_plan(plan);
@@ -97,13 +101,6 @@ double computeFFT(std::vector<short>& buffer) {
 
     // 12 * 43.07Hz = 516Hz
     return sqrt(out[12][0] * out[12][0] + out[12][1] * out[12][1]);
-}
-
-static void FillCanvasDuration(Canvas *canvas, int time_in_ms) {
-    canvas->Fill(255, 255, 255);
-    usleep(time_in_ms * 1000); 
-    canvas->Fill(0, 0, 0);
-    return;
 }
 
 int main(int argc, char *argv[]){
@@ -139,10 +136,16 @@ int main(int argc, char *argv[]){
     std::vector<short> buffer(buffer_size);
     double amplitude;
 
+    for (int i = 9; i < 15; i++) {
+        double frequency = (double)i * SAMPLE_RATE / BUFFER_SIZE;
+        std::cout << std::setw(10) << (int)frequency << " Hz";
+    }
+    std::cout << "\n";
+
     while (true) {
         snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
         amplitude = computeFFT(buffer);
-        if(amplitude > 150000){
+        if(amplitude > argv[1]){
             matrix->Fill(255, 255, 255);
         }
         else{
