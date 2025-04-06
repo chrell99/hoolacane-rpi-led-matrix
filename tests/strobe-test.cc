@@ -103,7 +103,7 @@ double computeFFT(std::vector<short>& buffer, double freq) {
 
     std::cout << "\r";
 
-    int temp = round(frequency/(SAMPLE_RATE / BUFFER_SIZE));
+    int temp = round(freq/(SAMPLE_RATE / BUFFER_SIZE));
     for (int i = temp - 1; i < (temp + 2); i++) {
         double magnitude = sqrt(out[i][0] * out[i][0] + out[i][1] * out[i][1]);
         std::cout << std::setw(10) << (int)magnitude << "   ";
@@ -117,12 +117,13 @@ double computeFFT(std::vector<short>& buffer, double freq) {
     fftw_free(out);
 
     // 12 * 43.07Hz = 516Hz
-    return sqrt(out[12][0] * out[12][0] + out[12][1] * out[12][1]);
+    return sqrt(out[temp][0] * out[temp][0] + out[temp][1] * out[temp][1]);
 }
 
 int main(int argc, char *argv[]){
     double frequency = 0.0;
     double ampvalue = 0.0;
+    double amplitude;
 
     if(processArguments(argc, argv, &frequency, &ampvalue) < 0){
         return -1;
