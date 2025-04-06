@@ -34,6 +34,23 @@ uint64_t micros()
     return std::chrono::duration_cast<std::chrono::microseconds>(now - start_time).count();
 }
 
+int processArguments(int argc, char *argv[], double *frequency, double *ampvalue) {
+    if (argc != 3) {
+        std::cerr << "Usage: " << argv[0] << " <frequency> <double_value>" << std::endl;
+        return -1;
+    }
+
+    *frequency = std::atof(argv[1]); 
+    *ampvalue = std::atof(argv[2]); 
+
+    
+
+    std::cout << "Frequency: " << *frequency << std::endl;
+    std::cout << "Value: " << *ampvalue << std::endl;
+
+    return 0;
+}
+
 int configure_pcm_device(snd_pcm_t *&pcm_handle, snd_pcm_hw_params_t *&params,
                          snd_pcm_format_t format, unsigned int rate, int channels, int buffer_size)
 {
@@ -65,7 +82,7 @@ int configure_pcm_device(snd_pcm_t *&pcm_handle, snd_pcm_hw_params_t *&params,
     return 0; 
 }
 
-double computeFFT(std::vector<short>& buffer) {
+double computeFFT(std::vector<short>& buffer, double freq) {
     int N = BUFFER_SIZE;
     fftw_complex *in, *out;
     fftw_plan plan;
@@ -86,8 +103,8 @@ double computeFFT(std::vector<short>& buffer) {
 
     std::cout << "\r";
 
-    // Print amplitude values aligned with the frequency labels
-    for (int i = 9; i < 15; i++) {  // Match spacing of frequency labels
+    int temp = round(frequency/(SAMPLE_RATE / BUFFER_SIZE));
+    for (int i = temp - 1; i < (temp + 2); i++) {
         double magnitude = sqrt(out[i][0] * out[i][0] + out[i][1] * out[i][1]);
         std::cout << std::setw(10) << (int)magnitude << "   ";
     }
@@ -104,6 +121,12 @@ double computeFFT(std::vector<short>& buffer) {
 }
 
 int main(int argc, char *argv[]){
+    double frequency = 0.0;
+    double ampvalue = 0.0;
+
+    if(processArguments(argc, argv, &frequency, &ampvalue) < 0){
+        return -1;
+    }
 
     //************ SOUND INIT **************/
     snd_pcm_t *pcm_handle;
@@ -130,13 +153,14 @@ int main(int argc, char *argv[]){
     rOptions.gpio_slowdown = 2;
 
     RGBMatrix *matrix = RGBMatrix::CreateFromOptions(options, rOptions);
-    matrix->SetBrightness(50);
+    matrix->SetBrightness(20);
 
     
     std::vector<short> buffer(buffer_size);
-    double amplitude;
 
-    for (int i = 9; i < 15; i++) {
+    int temp = round(frequency/(SAMPLE_RATE / BUFFER_SIZE));
+
+    for (int i = temp - 1; i < (temp + 2); i++) {
         double frequency = (double)i * SAMPLE_RATE / BUFFER_SIZE;
         std::cout << std::setw(10) << (int)frequency << " Hz";
     }
@@ -144,8 +168,8 @@ int main(int argc, char *argv[]){
 
     while (true) {
         snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
-        amplitude = computeFFT(buffer);
-        if(amplitude > std::stod(argv[1])){
+        amplitude = computeFFT(buffer, frequency);
+        if(amplitude > ampvalue){
             matrix->Fill(255, 255, 255);
         }
         else{
