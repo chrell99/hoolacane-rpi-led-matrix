@@ -33,7 +33,8 @@ int processArguments(int argc, char *argv[], double *maxamplitude, uint8_t *maxb
     }
 
     *maxamplitude = std::atof(argv[1]); 
-    *maxbrightness = std::stoi(argv[2]);
+    double tmp = std::atof(argv[2]);
+    *maxbrightness = static_cast<uint8_t>(tmp);
 
     std::cout << "Max Amplitude: " << *maxamplitude << std::endl;
     std::cout << "Max Brightness: " << *maxbrightness << std::endl;
@@ -84,6 +85,12 @@ float calculate_rms(const short *buffer, size_t buffer_size) {
     return rms;
 }
 
+float rms_to_db(float rms) {
+    if (rms == 0.0f) return 0.0;
+    
+    return 20 * std::log10(rms);
+}
+
 int main(int argc, char *argv[]){
     //************ INPUT VARS ************/
     double maxamplitude = 0.0;
@@ -128,10 +135,11 @@ int main(int argc, char *argv[]){
     while (true) {
         snd_pcm_readi(pcm_handle, buffer, buffer_size);
         
-        temp = calculate_rms(buffer, buffer_size);
+        rms = calculate_rms(buffer, buffer_size);
+        double rmsdB = rms_to_db(rms);
 
-        std::cout << temp << std::endl;
-
+        std::cout << rms << std::endl;
+        std::cout << rmsdB << std::endl;
         /*
         exponent = 0.2 + (amplitude / maxamplitude);
         temp2 = pow(maxbrightness, exponent);
