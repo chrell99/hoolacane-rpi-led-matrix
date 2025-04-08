@@ -34,19 +34,19 @@ uint64_t micros()
     return std::chrono::duration_cast<std::chrono::microseconds>(now - start_time).count();
 }
 
-int processArguments(int argc, char *argv[], double *frequency, double *ampvalue) {
-    if (argc != 3) {
-        std::cerr << "Usage: " << argv[0] << " <frequency> <double_value>" << std::endl;
+int processArguments(int argc, char *argv[], double *frequency, double *maxamplitude, uint8_t *maxbrightness) {
+    if (argc < 3) {
+        std::cerr << "Usage: " << argv[0] << " <frequency> <maxamplitude> <brightness>" << std::endl;
         return -1;
     }
 
     *frequency = std::atof(argv[1]); 
-    *ampvalue = std::atof(argv[2]); 
-
-    
+    *maxamplitude = std::atof(argv[2]); 
+    *maxbrightness = std::stoi(argv[3]);
 
     std::cout << "Frequency: " << *frequency << std::endl;
-    std::cout << "Value: " << *ampvalue << std::endl;
+    std::cout << "Max Amplitude: " << *maxamplitude << std::endl;
+    std::cout << "Max Brightness: " << *maxbrightness << std::endl;
 
     return 0;
 }
@@ -121,15 +121,17 @@ double computeFFT(std::vector<short>& buffer, double freq) {
 }
 
 int main(int argc, char *argv[]){
+    //************ INPUT VARS ************/
     double frequency = 0.0;
-    double ampvalue = 0.0;
-    double amplitude;
+    double maxamplitude = 0.0;
+    uint8_t maxbrightness = 100; 
 
-    if(processArguments(argc, argv, &frequency, &ampvalue) < 0){
+    if(processArguments(argc, argv, &frequency, &maxamplitude, &maxbrightness) < 0){
         return -1;
     }
 
-    //************ SOUND INIT **************/
+
+    //************ SOUND INIT ************/
     snd_pcm_t *pcm_handle;
     snd_pcm_hw_params_t *params;
     snd_pcm_format_t format = SND_PCM_FORMAT_S16_LE;
@@ -141,7 +143,8 @@ int main(int argc, char *argv[]){
         return -1; 
     }
 
-    //************ RGB MATRIX VARS **************/
+
+    //************ RGB MATRIX VARS ************/
     RGBMatrix::Options options;
     options.hardware_mapping = "regular";
     options.rows = 32;
@@ -154,7 +157,6 @@ int main(int argc, char *argv[]){
     rOptions.gpio_slowdown = 2;
 
     RGBMatrix *matrix = RGBMatrix::CreateFromOptions(options, rOptions);
-    matrix->SetBrightness(20);
 
     
     std::vector<short> buffer(buffer_size);
@@ -167,19 +169,29 @@ int main(int argc, char *argv[]){
     }
     std::cout << "\n";
 
+    double amplitude;
+    double temp2;
+    double exponent;
     while (true) {
         snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
         amplitude = computeFFT(buffer, frequency);
-        if(amplitude > ampvalue){
-            matrix->Fill(255, 255, 255);
+
+        exponent = 0.2 + (amplitude / maxamplitude);
+        temp2 = pow(maxbrightness, exponent);
+
+        if(temp2 >= maxbrightness){
+            matrix->SetBrightness(maxbrightness);
+        }
+        else if(temp2 <= 10){
+            matrix->SetBrightness(0);
+            matrix->Fill(0, 0, 0);
         }
         else{
-            matrix->Fill(0, 0, 0);
+            matrix->SetBrightness(temp2);
+            matrix->Fill(255, 255, 255);
         }
 
     }
-
-
 
     if (matrix == NULL)
         return 1;
