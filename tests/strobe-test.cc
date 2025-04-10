@@ -13,7 +13,7 @@
 #include <signal.h>
 #include <deque>
 
-#define PCM_DEVICE "hw:1,0" // USB Dongle audio input
+#define PCM_DEVICE "hw:0,0" // USB Dongle audio input
 #define SAMPLE_RATE 44100   // 44.1 kHz sample rate
 #define BUFFER_SIZE 1024    // FFT buffer size (must be power of 2)
 /* Freq bins are calculated with the sample rate divided by the buffer size:
@@ -82,7 +82,7 @@ int configure_pcm_device(snd_pcm_t *&pcm_handle, snd_pcm_hw_params_t *&params,
     return 0; 
 }
 
-double computeFFT(std::vector<short>& buffer) {
+std::vector<double> computeFFT(std::vector<short>& buffer) {
     int N = BUFFER_SIZE;
     fftw_complex *in, *out;
     fftw_plan plan;
@@ -139,7 +139,6 @@ bool detectBeat(std::vector<double>& magnitudes) {
 int main(int argc, char *argv[]){
     //************ INPUT VARS ************/
     double frequency = 0.0;
-    double maxamplitudedb = 0;
     uint8_t maxbrightness = 100; 
 
     if(processArguments(argc, argv, &frequency, &maxamplitude, &maxbrightness) < 0){
