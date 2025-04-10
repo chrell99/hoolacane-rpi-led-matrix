@@ -11,6 +11,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <signal.h>
+#include <deque>
 
 #define PCM_DEVICE "hw:1,0" // USB Dongle audio input
 #define SAMPLE_RATE 44100   // 44.1 kHz sample rate
@@ -26,13 +27,12 @@
 using rgb_matrix::Canvas;
 using rgb_matrix::RGBMatrix;
 
-uint64_t micros()
-{
-    static auto start_time = std::chrono::steady_clock::now();
-    auto now = std::chrono::steady_clock::now();
+const int NUM_BINS = BUFFER_SIZE / 2;  // only half is useful in real FFT
+const int HISTORY_SIZE = 43;  // about 1 second at 43 fps
+const double FLUX_THRESHOLD = 100000.0;  // tweak as needed
 
-    return std::chrono::duration_cast<std::chrono::microseconds>(now - start_time).count();
-}
+std::vector<double> prevMagnitudes(NUM_BINS, 0.0);
+std::deque<double> fluxHistory;
 
 int processArguments(int argc, char *argv[], double *frequency, double *maxamplitude, uint8_t *maxbrightness) {
     if (argc < 3) {
@@ -82,18 +82,16 @@ int configure_pcm_device(snd_pcm_t *&pcm_handle, snd_pcm_hw_params_t *&params,
     return 0; 
 }
 
-double computeFFT(std::vector<short>& buffer, double freq) {
+double computeFFT(std::vector<short>& buffer) {
     int N = BUFFER_SIZE;
     fftw_complex *in, *out;
     fftw_plan plan;
 
-    // Allocate FFT input and output arrays
     in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
     out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
     
     plan = fftw_plan_dft_1d(N, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
 
-    // Allocate the input data to the FFTW in buffer
     for (int i = 0; i < N; i++) {
         in[i][0] = buffer[i];  
         in[i][1] = 0.0;        
@@ -101,29 +99,47 @@ double computeFFT(std::vector<short>& buffer, double freq) {
 
     fftw_execute(plan);
 
-    std::cout << "\r";
-
-    int temp = round(freq/(SAMPLE_RATE / BUFFER_SIZE));
-    for (int i = temp - 1; i < (temp + 2); i++) {
-        double magnitude = sqrt(out[i][0] * out[i][0] + out[i][1] * out[i][1]);
-        std::cout << std::setw(10) << (int)magnitude << "   ";
+    std::vector<double> magnitudes(N / 2);
+    for (int i = 0; i < N / 2; i++) {
+        magnitudes[i] = sqrt(out[i][0] * out[i][0] + out[i][1] * out[i][1]);
     }
 
-    std::cout << std::flush;
-
-    // Cleanup
     fftw_destroy_plan(plan);
     fftw_free(in);
     fftw_free(out);
 
-    // 12 * 43.07Hz = 516Hz
-    return sqrt(out[temp][0] * out[temp][0] + out[temp][1] * out[temp][1]);
+    
+    return magnitudes;
+}
+
+bool detectBeat(std::vector<double>& magnitudes) {
+    double flux = 0.0;
+
+    for (int i = 0; i < NUM_BINS; ++i) {
+        double diff = magnitudes[i] - prevMagnitudes[i];
+        if (diff > 0) {
+            flux += diff;
+        }
+        prevMagnitudes[i] = magnitudes[i];  // update for next frame
+    }
+
+    // Maintain rolling history
+    if (fluxHistory.size() >= HISTORY_SIZE)
+        fluxHistory.pop_front();
+
+    fluxHistory.push_back(flux);
+
+    double avg = 0.0;
+    for (auto f : fluxHistory) avg += f;
+    avg /= fluxHistory.size();
+
+    return flux > avg + FLUX_THRESHOLD;
 }
 
 int main(int argc, char *argv[]){
     //************ INPUT VARS ************/
     double frequency = 0.0;
-    double maxamplitude = 0.0;
+    double maxamplitudedb = 0;
     uint8_t maxbrightness = 100; 
 
     if(processArguments(argc, argv, &frequency, &maxamplitude, &maxbrightness) < 0){
@@ -160,35 +176,16 @@ int main(int argc, char *argv[]){
 
     
     std::vector<short> buffer(buffer_size);
-
-    int temp = round(frequency/(SAMPLE_RATE / BUFFER_SIZE));
-
-    for (int i = temp - 1; i < (temp + 2); i++) {
-        double frequency = (double)i * SAMPLE_RATE / BUFFER_SIZE;
-        std::cout << std::setw(10) << (int)frequency << " Hz";
-    }
-    std::cout << "\n";
-
-    double amplitude;
-    double temp2;
-    double exponent;
+    std::vector<double> magnitudes;
     while (true) {
         snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
-        amplitude = computeFFT(buffer, frequency);
+        magnitudes = computeFFT(buffer);
 
-        exponent = 0.2 + (amplitude / maxamplitude);
-        temp2 = pow(maxbrightness, exponent);
-
-        if(temp2 >= maxbrightness){
-            matrix->SetBrightness(maxbrightness);
-        }
-        else if(temp2 <= 10){
-            matrix->SetBrightness(0);
-            matrix->Fill(0, 0, 0);
+        if(detectBeat(magnitudes)){
+            matrix->Fill(255, 255, 255);
         }
         else{
-            matrix->SetBrightness(temp2);
-            matrix->Fill(255, 255, 255);
+            matrix->Fill(0, 0, 0);
         }
 
     }
