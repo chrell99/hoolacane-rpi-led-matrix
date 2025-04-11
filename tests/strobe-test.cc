@@ -29,7 +29,7 @@ using rgb_matrix::RGBMatrix;
 
 const int NUM_BINS = BUFFER_SIZE / 2;  // only half is useful in real FFT
 const int HISTORY_SIZE = 43;  // about 1 second at 43 fps
-const int MIN_MAGNITUDE_DB = 65; // minimum signal strength to remove noise
+const int MIN_MAGNITUDE_DB = 80; // minimum signal strength to remove noise
 
 double FLUX_THRESHOLD;
 int LOW_BIN;
@@ -190,7 +190,7 @@ int main(int argc, char *argv[]){
     rOptions.gpio_slowdown = 2;
 
     RGBMatrix *matrix = RGBMatrix::CreateFromOptions(options, rOptions);
-
+    matrix->SetBrightness(maxbrightness);
     
     std::vector<short> buffer(buffer_size);
     std::vector<double> magnitudes;
