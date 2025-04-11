@@ -29,7 +29,7 @@ using rgb_matrix::RGBMatrix;
 
 const int NUM_BINS = BUFFER_SIZE / 2;  // only half is useful in real FFT
 const int HISTORY_SIZE = 43;  // about 1 second at 43 fps
-const int MIN_MAGNITUDE_DB = 80; // minimum signal strength to remove noise
+const int MIN_MAGNITUDE = 10000; // minimum signal strength to remove noise
 
 double FLUX_THRESHOLD;
 int LOW_BIN;
@@ -108,7 +108,7 @@ std::vector<double> computeFFT(std::vector<short>& buffer) {
     std::vector<double> magnitudesDB(N / 2);
     for (int i = 0; i < N / 2; i++) {
         double mag = sqrt(out[i][0] * out[i][0] + out[i][1] * out[i][1]);
-        magnitudesDB[i] = 20.0 * log10(mag + 1e-10);
+        magnitudesDB[i] = mag;
     }
 
     fftw_destroy_plan(plan);
@@ -123,7 +123,7 @@ bool detectBeat(std::vector<double>& magnitudes) {
 
     for (int i = LOW_BIN; i < HIGH_BIN; ++i) {
         // Removes the noise when there is no sound
-        if(magnitudes[i] < MIN_MAGNITUDE_DB){
+        if(magnitudes[i] < MIN_MAGNITUDE){
             magnitudes[i] = 0.0;
         }
         double diff = magnitudes[i] - prevMagnitudes[i];
