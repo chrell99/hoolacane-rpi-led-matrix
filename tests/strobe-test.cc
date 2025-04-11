@@ -29,10 +29,11 @@ using rgb_matrix::RGBMatrix;
 
 const int NUM_BINS = BUFFER_SIZE / 2;  // only half is useful in real FFT
 const int HISTORY_SIZE = 43;  // about 1 second at 43 fps
-const double FLUX_THRESHOLD = 100000.0;  // tweak as needed
 
+double FLUX_THRESHOLD;
 int LOW_BIN;
 int HIGH_BIN;
+
 std::vector<double> prevMagnitudes(NUM_BINS, 0.0);
 std::deque<double> fluxHistory;
 
@@ -144,7 +145,7 @@ int main(int argc, char *argv[]){
     double freqFrom = 60.0;
     double freqTo = 2000.0;
     uint8_t maxbrightness = 80; 
-    uint8_t spectralFluxdB = 5
+    uint8_t spectralFluxdB = 5;
 
     if(processArguments(argc, argv, &freqFrom, &freqTo, &maxbrightness, &spectralFluxdB) < 0){
         return -1;
@@ -152,6 +153,7 @@ int main(int argc, char *argv[]){
 
     LOW_BIN = static_cast<int>(round(freqFrom / (SAMPLE_RATE / BUFFER_SIZE)));
     HIGH_BIN = static_cast<int>(round(freqTo / (SAMPLE_RATE / BUFFER_SIZE)));
+    FLUX_THRESHOLD = spectralFluxdB;
 
     //************ SOUND INIT ************/
     snd_pcm_t *pcm_handle;
