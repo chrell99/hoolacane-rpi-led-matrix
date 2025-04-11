@@ -37,7 +37,7 @@ int HIGH_BIN;
 std::vector<double> prevMagnitudes(NUM_BINS, 0.0);
 std::deque<double> fluxHistory;
 
-int processArguments(int argc, char *argv[], double *freqFrom, double *freqTo, uint8_t *maxBrightness, uint8_t *spectralFluxdB) {
+int processArguments(int argc, char *argv[], double *freqFrom, double *freqTo, uint8_t *maxBrightness, double *spectralFluxdB) {
     if (argc < 5) {
         std::cerr << "Usage: " << argv[0] << " <frequency_from> <frequency_to> <brightness> <dBFlux>" << std::endl;
         return -1;
@@ -46,12 +46,12 @@ int processArguments(int argc, char *argv[], double *freqFrom, double *freqTo, u
     *freqFrom = std::atof(argv[1]); 
     *freqTo = std::atof(argv[2]); 
     *maxBrightness = static_cast<uint8_t>(std::stoi(argv[3]));
-    *spectralFluxdB = static_cast<uint8_t>(std::stoi(argv[4]));
+    *spectralFluxdB = std::atof(argv[4]);
 
 
     std::cout << "Frequency Range: " << *freqFrom << " Hz to " << *freqTo << " Hz" << std::endl;
     std::cout << "Max Brightness: " << static_cast<int>(*maxBrightness) << std::endl;
-    std::cout << "Spectral Flux in DB: " << static_cast<int>(*spectralFluxdB) << std::endl;
+    std::cout << "Spectral Flux in DB: " << *spectralFluxdB << std::endl;
 
     return 0;
 }
@@ -147,7 +147,7 @@ int main(int argc, char *argv[]){
     double freqFrom = 60.0;
     double freqTo = 2000.0;
     uint8_t maxbrightness = 80; 
-    uint8_t spectralFluxdB = 5;
+    double spectralFluxdB = 5.0;
 
     if(processArguments(argc, argv, &freqFrom, &freqTo, &maxbrightness, &spectralFluxdB) < 0){
         return -1;
@@ -156,6 +156,8 @@ int main(int argc, char *argv[]){
     LOW_BIN = static_cast<int>(round(freqFrom / (SAMPLE_RATE / BUFFER_SIZE)));
     HIGH_BIN = static_cast<int>(round(freqTo / (SAMPLE_RATE / BUFFER_SIZE)));
     FLUX_THRESHOLD = spectralFluxdB;
+
+
 
     //************ SOUND INIT ************/
     snd_pcm_t *pcm_handle;
