@@ -31,22 +31,25 @@ const int NUM_BINS = BUFFER_SIZE / 2;  // only half is useful in real FFT
 const int HISTORY_SIZE = 43;  // about 1 second at 43 fps
 const double FLUX_THRESHOLD = 100000.0;  // tweak as needed
 
+int LOW_BIN;
+int HIGH_BIN;
 std::vector<double> prevMagnitudes(NUM_BINS, 0.0);
 std::deque<double> fluxHistory;
 
-int processArguments(int argc, char *argv[], double *frequency, double *maxamplitude, uint8_t *maxbrightness) {
-    if (argc < 3) {
-        std::cerr << "Usage: " << argv[0] << " <frequency> <maxamplitude> <brightness>" << std::endl;
-        return -1;
+int processArguments(int argc, char *argv[], double *freqFrom, double *freqTo, uint8_t *maxBrightness, uint8_t *spectralFluxdB) {
+    if (argc < 5) {
+        std::cerr << "Usage: " << argv[0] << " <frequency_from> <frequency_to> <brightness> <dBFlux>" << std::endl;
     }
 
-    *frequency = std::atof(argv[1]); 
-    *maxamplitude = std::atof(argv[2]); 
-    *maxbrightness = std::stoi(argv[3]);
+    *freqFrom = std::atof(argv[1]); 
+    *freqTo = std::atof(argv[2]); 
+    *maxBrightness = static_cast<uint8_t>(std::stoi(argv[3]));
+    *spectralFluxdB = static_cast<uint8_t>(std::stoi(argv[4]));
 
-    std::cout << "Frequency: " << *frequency << std::endl;
-    std::cout << "Max Amplitude: " << *maxamplitude << std::endl;
-    std::cout << "Max Brightness: " << *maxbrightness << std::endl;
+
+    std::cout << "Frequency Range: " << *freqFrom << " Hz to " << *freqTo << " Hz" << std::endl;
+    std::cout << "Max Brightness: " << static_cast<int>(*maxBrightness) << std::endl;
+    std::cout << "Spectral Flux in DB: " << static_cast<int>(*spectralFluxdB) << std::endl;
 
     return 0;
 }
@@ -89,33 +92,33 @@ std::vector<double> computeFFT(std::vector<short>& buffer) {
 
     in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
     out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
-    
+
     plan = fftw_plan_dft_1d(N, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
 
     for (int i = 0; i < N; i++) {
-        in[i][0] = buffer[i];  
-        in[i][1] = 0.0;        
+        in[i][0] = buffer[i];
+        in[i][1] = 0.0;
     }
 
     fftw_execute(plan);
 
-    std::vector<double> magnitudes(N / 2);
+    std::vector<double> magnitudesDB(N / 2);
     for (int i = 0; i < N / 2; i++) {
-        magnitudes[i] = sqrt(out[i][0] * out[i][0] + out[i][1] * out[i][1]);
+        double mag = sqrt(out[i][0] * out[i][0] + out[i][1] * out[i][1]);
+        magnitudesDB[i] = 20.0 * log10(mag + 1e-10);
     }
 
     fftw_destroy_plan(plan);
     fftw_free(in);
     fftw_free(out);
 
-    
-    return magnitudes;
+    return magnitudesDB;
 }
 
 bool detectBeat(std::vector<double>& magnitudes) {
     double flux = 0.0;
 
-    for (int i = 0; i < NUM_BINS; ++i) {
+    for (int i = LOW_BIN; i < HIGH_BIN; ++i) {
         double diff = magnitudes[i] - prevMagnitudes[i];
         if (diff > 0) {
             flux += diff;
@@ -138,13 +141,17 @@ bool detectBeat(std::vector<double>& magnitudes) {
 
 int main(int argc, char *argv[]){
     //************ INPUT VARS ************/
-    double frequency = 0.0;
-    uint8_t maxbrightness = 100; 
+    double freqFrom = 60.0;
+    double freqTo = 2000.0;
+    uint8_t maxbrightness = 80; 
+    uint8_t spectralFluxdB = 5
 
-    if(processArguments(argc, argv, &frequency, &maxamplitude, &maxbrightness) < 0){
+    if(processArguments(argc, argv, &freqFrom, &freqTo, &maxbrightness, &spectralFluxdB) < 0){
         return -1;
     }
 
+    LOW_BIN = static_cast<int>(round(freqFrom / (SAMPLE_RATE / BUFFER_SIZE)));
+    HIGH_BIN = static_cast<int>(round(freqTo / (SAMPLE_RATE / BUFFER_SIZE)));
 
     //************ SOUND INIT ************/
     snd_pcm_t *pcm_handle;
