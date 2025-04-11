@@ -40,6 +40,7 @@ std::deque<double> fluxHistory;
 int processArguments(int argc, char *argv[], double *freqFrom, double *freqTo, uint8_t *maxBrightness, uint8_t *spectralFluxdB) {
     if (argc < 5) {
         std::cerr << "Usage: " << argv[0] << " <frequency_from> <frequency_to> <brightness> <dBFlux>" << std::endl;
+        return -1;
     }
 
     *freqFrom = std::atof(argv[1]); 
