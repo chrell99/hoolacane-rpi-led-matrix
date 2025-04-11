@@ -30,6 +30,7 @@ using rgb_matrix::RGBMatrix;
 const int NUM_BINS = BUFFER_SIZE / 2;  // only half is useful in real FFT
 const int HISTORY_SIZE = 43;  // about 1 second at 43 fps
 const int MIN_MAGNITUDE_DB = 80; // minimum signal strength to remove noise
+const int MIN_BEAT_INTERVAL_MS = 200;
 
 double FLUX_THRESHOLD;
 int LOW_BIN;
@@ -37,6 +38,7 @@ int HIGH_BIN;
 
 std::vector<double> prevMagnitudes(NUM_BINS, 0.0);
 std::deque<double> fluxHistory;
+std::chrono::steady_clock::time_point lastBeatTime;
 
 int processArguments(int argc, char *argv[], double *freqFrom, double *freqTo, uint8_t *maxBrightness, double *spectralFluxdB) {
     if (argc < 5) {
@@ -143,8 +145,15 @@ bool detectBeat(std::vector<double>& magnitudes) {
     for (auto f : fluxHistory) avg += f;
     avg /= fluxHistory.size();
 
-    std::cout << "Flux: " << flux << " avg: " << avg << std::endl;
-    return flux > avg + FLUX_THRESHOLD;
+    auto now = std::chrono::steady_clock::now();
+    if (flux > avg + FLUX_THRESHOLD) {
+        auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastBeatTime).count();
+        if (diff > MIN_BEAT_INTERVAL_MS) {
+            lastBeatTime = now;
+            return true;
+        }
+    }
+    return false;
 }
 
 int main(int argc, char *argv[]){
