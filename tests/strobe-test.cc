@@ -138,6 +138,7 @@ bool detectBeat(std::vector<double>& magnitudes) {
     for (auto f : fluxHistory) avg += f;
     avg /= fluxHistory.size();
 
+    std::cout << "Flux: " << flux << " avg: " << avg << std::endl;
     return flux > avg + FLUX_THRESHOLD;
 }
 
