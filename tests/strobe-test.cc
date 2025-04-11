@@ -135,7 +135,7 @@ bool detectBeat(std::vector<double>& magnitudes) {
         }
         prevMagnitudes[i] = magnitudes[i]; 
     }
-
+    flux = flux/HIGH_BIN;
     // Maintain rolling history
     if (fluxHistory.size() >= HISTORY_SIZE)
         fluxHistory.pop_front();
