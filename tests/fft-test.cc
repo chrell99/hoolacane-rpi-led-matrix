@@ -47,7 +47,8 @@ void computeFFT(std::vector<short>& buffer) {
     // Print amplitude values aligned with the frequency labels
     for (int i = 1; i < 15; i++) {  // Match spacing of frequency labels
         double magnitude = sqrt(out[i][0] * out[i][0] + out[i][1] * out[i][1]);
-        std::cout << std::setw(10) << (int)magnitude << "   ";
+        double magdB = 20 *log10(magnitude + 0.01);
+        std::cout << std::setw(10) << (int)magdB << "dB ";
     }
 
     std::cout << std::flush;
