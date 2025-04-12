@@ -35,7 +35,8 @@ void computeFFT(std::vector<short>& buffer) {
 
     // Convert input audio data to FFTW input format
     for (int i = 0; i < N; i++) {
-        in[i][0] = buffer[i];  // Real part (audio sample)
+        double window = 0.5 * (1 - cos((2 * M_PI * i) / (N - 1)));
+        in[i][0] = buffer[i] * window;  // Real part (audio sample)
         in[i][1] = 0.0;        // Imaginary part (set to zero)
     }
 
