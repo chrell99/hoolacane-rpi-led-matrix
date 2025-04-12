@@ -7,7 +7,7 @@
 #include <chrono>
 #include <iomanip> 
 
-#define PCM_DEVICE "hw:1,0"  // USB Dongle audio input
+#define PCM_DEVICE "hw:0,0"  // USB Dongle audio input
 #define SAMPLE_RATE 44100    // 44.1 kHz sample rate
 #define BUFFER_SIZE 1024     // FFT buffer size (must be power of 2)
 
@@ -45,7 +45,7 @@ void computeFFT(std::vector<short>& buffer) {
     std::cout << "\r";
 
     // Print amplitude values aligned with the frequency labels
-    for (int i = 9; i < 15; i++) {  // Match spacing of frequency labels
+    for (int i = 1; i < 15; i++) {  // Match spacing of frequency labels
         double magnitude = sqrt(out[i][0] * out[i][0] + out[i][1] * out[i][1]);
         std::cout << std::setw(10) << (int)magnitude << "   ";
     }
@@ -89,7 +89,7 @@ int main() {
     }
 
     std::vector<short> buffer(buffer_size);
-    for (int i = 9; i < 15; i++) {
+    for (int i = 1; i < 15; i++) {
         double frequency = (double)i * SAMPLE_RATE / BUFFER_SIZE;
         std::cout << std::setw(10) << (int)frequency << " Hz";
     }
