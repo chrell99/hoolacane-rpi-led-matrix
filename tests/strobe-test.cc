@@ -102,7 +102,8 @@ std::vector<double> computeFFT(std::vector<short>& buffer) {
     plan = fftw_plan_dft_1d(N, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
 
     for (int i = 0; i < N; i++) {
-        in[i][0] = buffer[i];
+        double window = 0.5 * (1 - cos((2 * M_PI * i) / (N - 1)));
+        in[i][0] = buffer[i] * window;
         in[i][1] = 0.0;
     }
 
