@@ -154,7 +154,7 @@ int main(int argc, char *argv[]){
     options.parallel = 3;
     options.show_refresh_rate = false;
     options.multiplexing = 1;
-    options.pixel_mapper_config = "Rotate:90";
+    options.pixel_mapper_config = "Rotate:270";
     rgb_matrix::RuntimeOptions rOptions;
     rOptions.gpio_slowdown = 2;
 
@@ -178,14 +178,14 @@ int main(int argc, char *argv[]){
         snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
         magnitudes = computeFFT(buffer);
         int fftSize = magnitudes.size();
-        int temp = 1;
+        double temp = 1;
         int lastBinEnd = 1;
         for (int i = 0; i < 24; i++){
 
             int binStart = lastBinEnd;
-            int binEnd   = lastBinEnd + temp;
+            int binEnd   = lastBinEnd + (int)temp;
             lastBinEnd = binEnd;
-            temp += 2;
+            temp += 1.7;
 
             double sum = 0;
             for (int b = binStart; b < binEnd; ++b) {
@@ -198,6 +198,7 @@ int main(int argc, char *argv[]){
             double normalized = (avg - dBMin) / (dBMax - dBMin);
 
             barHeights_[i] = static_cast<int>(normalized * height_);
+            std::cout << i << binStart << binEnd << std::endl;
         }
 
         for (int i=0; i<numBars_; ++i) {
