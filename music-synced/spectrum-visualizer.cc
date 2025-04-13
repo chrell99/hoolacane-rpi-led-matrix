@@ -159,7 +159,6 @@ int main(int argc, char *argv[]){
 
     RGBMatrix *matrix = RGBMatrix::CreateFromOptions(options, rOptions);
     matrix->SetBrightness(maxbrightness);
-    matrix->rotate(90);
     
     std::vector<short> buffer(buffer_size);
     std::vector<double> magnitudes;
