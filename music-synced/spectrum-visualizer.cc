@@ -177,12 +177,12 @@ int main(int argc, char *argv[]){
         snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
         magnitudes = computeFFT(buffer);
         int fftSize = magnitudes.size();
-        int temp = 1
-        int lastBinEnd = 0
+        int temp = 1;
+        int lastBinEnd = 0;
         for (int i = 0; i < 24; i++){
 
-            binStart = lastBinEnd;
-            binEnd   = lastBinEnd + temp * 2;
+            int binStart = lastBinEnd;
+            int binEnd   = lastBinEnd + temp * 2;
             lastBinEnd = binEnd;
             temp += 2;
 
