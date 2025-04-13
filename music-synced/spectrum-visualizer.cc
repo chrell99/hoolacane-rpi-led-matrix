@@ -33,6 +33,10 @@ const int HISTORY_SIZE = 43;  // about 1 second at 43 fps
 int LOW_BIN;
 int HIGH_BIN;
 
+T clamp(T value, T minVal, T maxVal) {
+    return std::max(minVal, std::min(value, maxVal));
+}
+
 int processArguments(int argc, char *argv[], double *freqFrom, double *freqTo, uint8_t *maxBrightness) {
     if (argc < 4) {
         std::cerr << "Usage: " << argv[0] << " <frequency_from> <frequency_to> <brightness>" << std::endl;
@@ -111,12 +115,6 @@ std::vector<double> computeFFT(std::vector<short>& buffer) {
     return magnitudesDB;
 }
 
-void drawBarRow(int bar, int y, uint8_t r, uint8_t g, uint8_t b) {
-    for (int x=bar*barWidth_; x<(bar+1)*barWidth_; ++x) {
-        canvas()->SetPixel(x, height_-1-y, r, g, b);
-    }
-}
-
 int main(int argc, char *argv[]){
     //************ INPUT VARS ************/
     double freqFrom = 0.0;
@@ -162,12 +160,10 @@ int main(int argc, char *argv[]){
     std::vector<double> magnitudes;
 
     int numBars_ = 24; 
-    const int width = canvas()->width();
-    int height_ = canvas()->height();
+    const int width = matrix->width();
+    int height_ = matrix->height();
     int barWidth_ = width/numBars_;
     int* barHeights_ = new int[numBars_];
-    int* barMeans_ = new int[numBars_];
-    int* barFreqs_ = new int[numBars_];
     int heightGreen_  = height_*4/12;
     int heightYellow_ = height_*8/12;
     int heightOrange_ = height_*10/12;
@@ -182,11 +178,11 @@ int main(int argc, char *argv[]){
             double barFreqStart = freqFrom * pow(freqTo / freqFrom, static_cast<double>(i) / numBars_);
             double barFreqEnd   = freqFrom * pow(freqTo / freqFrom, static_cast<double>(i + 1) / numBars_);
 
-            int binStart = static_cast<int>((barFreqStart / SAMPLE_RATE) * fftSize)
-            int binEnd = static_cast<int>((barFreqEnd / SAMPLE_RATE) * fftSize)
+            int binStart = static_cast<int>((barFreqStart / SAMPLE_RATE) * fftSize);
+            int binEnd = static_cast<int>((barFreqEnd / SAMPLE_RATE) * fftSize);
 
-            binStart = std::clamp(binStart, 0, fftSize - 1);
-            binEnd   = std::clamp(binEnd, binStart + 1, fftSize);
+            binStart = clamp(binStart, 0, fftSize - 1);
+            binEnd   = clamp(binEnd, binStart + 1, fftSize);
 
             double sum = 0;
             for (int b = binStart; b < binEnd; ++b) {
@@ -206,21 +202,31 @@ int main(int argc, char *argv[]){
             int y;
             for (y=0; y<barHeights_[i]; ++y) {
                 if (y<heightGreen_) {
-                drawBarRow(i, y, 0, 200, 0);
+                    for (int x=i*barWidth_; x<(i+1)*barWidth_; ++x) {
+                        matrix->SetPixel(x, height_-1-y, 0, 200, 0);
+                    }
                 }
                 else if (y<heightYellow_) {
-                drawBarRow(i, y, 150, 150, 0);
+                    for (int x=i*barWidth_; x<(i+1)*barWidth_; ++x) {
+                        matrix->SetPixel(x, height_-1-y, 150, 150, 0);
+                    }
                 }
                 else if (y<heightOrange_) {
-                drawBarRow(i, y, 250, 100, 0);
+                    for (int x=i*barWidth_; x<(i+1)*barWidth_; ++x) {
+                        matrix->SetPixel(x, height_-1-y, 250, 100, 0);
+                    }
                 }
                 else {
-                drawBarRow(i, y, 200, 0, 0);
+                    for (int x=i*barWidth_; x<(i+1)*barWidth_; ++x) {
+                        matrix->SetPixel(x, height_-1-y, 200, 0, 0);
+                    }
                 }
             }
             // Anything above the bar should be black
             for (; y<height_; ++y) {
-                drawBarRow(i, y, 0, 0, 0);
+                for (int x=i*barWidth_; x<(i+1)*barWidth_; ++x) {
+                    matrix->SetPixel(x, height_-1-y, 0, 0, 0);
+                }
             }
         }
 
@@ -233,105 +239,3 @@ int main(int argc, char *argv[]){
     delete matrix;
     return 0;
 }
-
-
-class VolumeBars : public DemoRunner {
-    public:
-      VolumeBars(Canvas *m, int delay_ms=50, int numBars=8)
-        : DemoRunner(m), delay_ms_(delay_ms),
-          numBars_(numBars), t_(0) {
-      }
-    
-      ~VolumeBars() {
-        delete [] barHeights_;
-        delete [] barFreqs_;
-        delete [] barMeans_;
-      }
-    
-      void Run() override {
-        const int width = canvas()->width();
-        height_ = canvas()->height();
-        barWidth_ = width/numBars_;
-        barHeights_ = new int[numBars_];
-        barMeans_ = new int[numBars_];
-        barFreqs_ = new int[numBars_];
-        heightGreen_  = height_*4/12;
-        heightYellow_ = height_*8/12;
-        heightOrange_ = height_*10/12;
-        heightRed_    = height_*12/12;
-    
-        // Array of possible bar means
-        int numMeans = 10;
-        int means[10] = {1,2,3,4,5,6,7,8,16,32};
-        for (int i=0; i<numMeans; ++i) {
-          means[i] = height_ - means[i]*height_/8;
-        }
-        // Initialize bar means randomly
-        srand(time(NULL));
-        for (int i=0; i<numBars_; ++i) {
-          barMeans_[i] = rand()%numMeans;
-          barFreqs_[i] = 1<<(rand()%3);
-        }
-    
-        // Start the loop
-        while (!interrupt_received) {
-          if (t_ % 8 == 0) {
-            // Change the means
-            for (int i=0; i<numBars_; ++i) {
-              barMeans_[i] += rand()%3 - 1;
-              if (barMeans_[i] >= numMeans)
-                barMeans_[i] = numMeans-1;
-              if (barMeans_[i] < 0)
-                barMeans_[i] = 0;
-            }
-          }
-    
-          // Update bar heights
-          t_++;
-          for (int i=0; i<numBars_; ++i) {
-            barHeights_[i] = (height_ - means[barMeans_[i]])
-              * sin(0.1*t_*barFreqs_[i]) + means[barMeans_[i]];
-            if (barHeights_[i] < height_/8)
-              barHeights_[i] = rand() % (height_/8) + 1;
-          }
-    
-          for (int i=0; i<numBars_; ++i) {
-            int y;
-            for (y=0; y<barHeights_[i]; ++y) {
-              if (y<heightGreen_) {
-                drawBarRow(i, y, 0, 200, 0);
-              }
-              else if (y<heightYellow_) {
-                drawBarRow(i, y, 150, 150, 0);
-              }
-              else if (y<heightOrange_) {
-                drawBarRow(i, y, 250, 100, 0);
-              }
-              else {
-                drawBarRow(i, y, 200, 0, 0);
-              }
-            }
-            // Anything above the bar should be black
-            for (; y<height_; ++y) {
-              drawBarRow(i, y, 0, 0, 0);
-            }
-          }
-        }
-      }
-    
-    private:
-      
-    
-      int delay_ms_;
-      int numBars_;
-      int* barHeights_;
-      int barWidth_;
-      int height_;
-      int heightGreen_;
-      int heightYellow_;
-      int heightOrange_;
-      int heightRed_;
-      int* barFreqs_;
-      int* barMeans_;
-      int t_;
-    };
