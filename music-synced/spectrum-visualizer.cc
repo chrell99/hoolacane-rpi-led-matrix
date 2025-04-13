@@ -154,6 +154,7 @@ int main(int argc, char *argv[]){
     options.parallel = 3;
     options.show_refresh_rate = false;
     options.multiplexing = 1;
+    options.pixel_mapper_config = "Rotate:90";
     rgb_matrix::RuntimeOptions rOptions;
     rOptions.gpio_slowdown = 2;
 
@@ -204,22 +205,22 @@ int main(int argc, char *argv[]){
             for (y=0; y<barHeights_[i]; ++y) {
                 if (y<heightGreen_) {
                     for (int x=i*barWidth_; x<(i+1)*barWidth_; ++x) {
-                        matrix->SetPixel(height_-1-y, x, 0, 200, 0);
+                        matrix->SetPixel(x, height_-1-y, 0, 200, 0);
                     }
                 }
                 else if (y<heightYellow_) {
                     for (int x=i*barWidth_; x<(i+1)*barWidth_; ++x) {
-                        matrix->SetPixel(height_-1-y, x, 150, 150, 0);
+                        matrix->SetPixel(x, height_-1-y, 150, 150, 0);
                     }
                 }
                 else if (y<heightOrange_) {
                     for (int x=i*barWidth_; x<(i+1)*barWidth_; ++x) {
-                        matrix->SetPixel(height_-1-y, x, 250, 100, 0);
+                        matrix->SetPixel(x, height_-1-y, 250, 100, 0);
                     }
                 }
                 else {
                     for (int x=i*barWidth_; x<(i+1)*barWidth_; ++x) {
-                        matrix->SetPixel(height_-1-y, x, 200, 0, 0);
+                        matrix->SetPixel(x, height_-1-y, 200, 0, 0);
                     }
                 }
             }
