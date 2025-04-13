@@ -30,6 +30,7 @@ using rgb_matrix::RGBMatrix;
 const int NUM_BINS = BUFFER_SIZE / 2;  // only half is useful in real FFT
 const int HISTORY_SIZE = 43;  // about 1 second at 43 fps
 const int MIN_MAGNITUDE_DB = 80; // minimum signal strength to remove noise
+const int CYCLES_PER_BEAT = 3;
 
 double FLUX_THRESHOLD;
 int LOW_BIN;
@@ -200,15 +201,22 @@ int main(int argc, char *argv[]){
     
     std::vector<short> buffer(buffer_size);
     std::vector<double> magnitudes;
+    int cycle = 0;
     while (true) {
         snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
         magnitudes = computeFFT(buffer);
-
-        if(detectBeat(magnitudes)){
-            matrix->Fill(255, 255, 255);
+        
+        if(cycle < CYCLES_PER_BEAT){
+            cycle++
         }
         else{
-            matrix->Fill(0, 0, 0);
+            if(detectBeat(magnitudes)){
+                matrix->Fill(255, 255, 255);
+                cycle = 0;
+            }
+            else{
+                matrix->Fill(0, 0, 0);
+            }
         }
 
     }
