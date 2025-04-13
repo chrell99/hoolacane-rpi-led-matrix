@@ -197,40 +197,36 @@ int main(int argc, char *argv[]){
             double normalized = (avg - dBMin) / (dBMax - dBMin);
 
             barHeights_[i] = static_cast<int>(normalized * height_);
-            std::cout << i << binStart << binEnd << std::endl;
         }
 
-        for (int i = 0; i < numBars_; ++i) {
+        for (int i=0; i<numBars_; ++i) {
             int y;
-        
-            // Draw from the bottom up based on bar height
-            for (y = 0; y < barHeights_[i]; ++y) {
-                if (y < heightGreen_) {
-                    for (int x = i * barWidth_; x < (i + 1) * barWidth_; ++x) {
-                        matrix->SetPixel(x, y, 0, 200, 0); // Drawing from bottom to top
+            for (y=0; y<barHeights_[i]; ++y) {
+                if (y<heightGreen_) {
+                    for (int x=i*barWidth_; x<(i+1)*barWidth_; ++x) {
+                        matrix->SetPixel(height_-1-y, x, 0, 200, 0);
                     }
                 }
-                else if (y < heightYellow_) {
-                    for (int x = i * barWidth_; x < (i + 1) * barWidth_; ++x) {
-                        matrix->SetPixel(x, y, 150, 150, 0); // Yellow color for this range
+                else if (y<heightYellow_) {
+                    for (int x=i*barWidth_; x<(i+1)*barWidth_; ++x) {
+                        matrix->SetPixel(height_-1-y, x, 150, 150, 0);
                     }
                 }
-                else if (y < heightOrange_) {
-                    for (int x = i * barWidth_; x < (i + 1) * barWidth_; ++x) {
-                        matrix->SetPixel(x, y, 250, 100, 0); // Orange color for this range
+                else if (y<heightOrange_) {
+                    for (int x=i*barWidth_; x<(i+1)*barWidth_; ++x) {
+                        matrix->SetPixel(height_-1-y, x, 250, 100, 0);
                     }
                 }
                 else {
-                    for (int x = i * barWidth_; x < (i + 1) * barWidth_; ++x) {
-                        matrix->SetPixel(x, y, 200, 0, 0); // Red color for this range
+                    for (int x=i*barWidth_; x<(i+1)*barWidth_; ++x) {
+                        matrix->SetPixel(height_-1-y, x, 200, 0, 0);
                     }
                 }
             }
-        
             // Anything above the bar should be black
-            for (; y < height_; ++y) {
-                for (int x = i * barWidth_; x < (i + 1) * barWidth_; ++x) {
-                    matrix->SetPixel(x, y, 0, 0, 0); // Fill the remaining area with black
+            for (; y<height_; ++y) {
+                for (int x=i*barWidth_; x<(i+1)*barWidth_; ++x) {
+                    matrix->SetPixel(x, height_-1-y, 0, 0, 0);
                 }
             }
         }
