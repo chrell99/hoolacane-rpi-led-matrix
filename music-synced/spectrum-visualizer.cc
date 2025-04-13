@@ -177,16 +177,14 @@ int main(int argc, char *argv[]){
         snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
         magnitudes = computeFFT(buffer);
         int fftSize = magnitudes.size();
+        int temp = 1
+        int lastBinEnd = 0
         for (int i = 0; i < 24; i++){
 
-            double barFreqStart = freqFrom * pow(freqTo / freqFrom, static_cast<double>(i) / numBars_);
-            double barFreqEnd   = freqFrom * pow(freqTo / freqFrom, static_cast<double>(i + 1) / numBars_);
-
-            int binStart = static_cast<int>((barFreqStart / SAMPLE_RATE) * fftSize);
-            int binEnd = static_cast<int>((barFreqEnd / SAMPLE_RATE) * fftSize);
-
-            binStart = clamp(binStart, 0, fftSize - 1);
-            binEnd   = clamp(binEnd, binStart + 1, fftSize);
+            binStart = lastBinEnd;
+            binEnd   = lastBinEnd + temp * 2;
+            lastBinEnd = binEnd;
+            temp += 2;
 
             double sum = 0;
             for (int b = binStart; b < binEnd; ++b) {
