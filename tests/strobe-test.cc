@@ -35,9 +35,6 @@ double FLUX_THRESHOLD;
 int LOW_BIN;
 int HIGH_BIN;
 
-double peakFlux = 0.0;
-double decayRate = 0.95;
-
 std::vector<double> prevMagnitudes(NUM_BINS, 0.0);
 std::deque<double> fluxHistory;
 
@@ -149,10 +146,8 @@ bool detectBeat(std::vector<double>& magnitudes) {
     for (auto f : fluxHistory) avg += f;
     avg /= fluxHistory.size();
 
-    peakFlux = std::max(peakFlux * decayRate, flux);
-
     std::cout << "Flux: " << flux << " avg: " << avg << std::endl;
-    if (flux > peakFlux * 0.8) {
+    if (flux > avg * 2.5) {
         return true;
     }
     return false;
