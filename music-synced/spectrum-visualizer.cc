@@ -33,22 +33,25 @@ const int HISTORY_SIZE = 43;  // about 1 second at 43 fps
 int LOW_BIN;
 int HIGH_BIN;
 
+template <typename T>
 T clamp(T value, T minVal, T maxVal) {
     return std::max(minVal, std::min(value, maxVal));
 }
 
-int processArguments(int argc, char *argv[], double *freqFrom, double *freqTo, uint8_t *maxBrightness) {
-    if (argc < 4) {
-        std::cerr << "Usage: " << argv[0] << " <frequency_from> <frequency_to> <brightness>" << std::endl;
+int processArguments(int argc, char *argv[], double *freqFrom, double *freqTo, uint8_t *maxBrightness, double *dBMax) {
+    if (argc < 5) {
+        std::cerr << "Usage: " << argv[0] << " <frequency_from> <frequency_to> <brightness> <dBMax>" << std::endl;
         return -1;
     }
 
     *freqFrom = std::atof(argv[1]); 
     *freqTo = std::atof(argv[2]); 
     *maxBrightness = static_cast<uint8_t>(std::stoi(argv[3]));
+    *dBMax = std::atof(argv[4]);
 
     std::cout << "Frequency Range: " << *freqFrom << " Hz to " << *freqTo << " Hz" << std::endl;
     std::cout << "Max Brightness: " << static_cast<int>(*maxBrightness) << std::endl;
+    std::cout << "Max dB: " << *dBMax << std::endl;
 
     return 0;
 }
@@ -120,8 +123,9 @@ int main(int argc, char *argv[]){
     double freqFrom = 0.0;
     double freqTo = 20000.0;
     uint8_t maxbrightness = 80; 
+    double dBMax = 130;
 
-    if(processArguments(argc, argv, &freqFrom, &freqTo, &maxbrightness) < 0){
+    if(processArguments(argc, argv, &freqFrom, &freqTo, &maxbrightness, &dBMax) < 0){
         return -1;
     }
 
@@ -155,6 +159,7 @@ int main(int argc, char *argv[]){
 
     RGBMatrix *matrix = RGBMatrix::CreateFromOptions(options, rOptions);
     matrix->SetBrightness(maxbrightness);
+    matrix->rotate(90);
     
     std::vector<short> buffer(buffer_size);
     std::vector<double> magnitudes;
@@ -191,11 +196,11 @@ int main(int argc, char *argv[]){
             double avg = sum / (binEnd - binStart);
 
             double dBMin = 80;
-            double dBMax = 130;
-            avg = std::clamp(avg, dBMin, dBMax);
+            avg = clamp(avg, dBMin, dBMax);
             double normalized = (avg - dBMin) / (dBMax - dBMin);
 
             barHeights_[i] = static_cast<int>(normalized * height_);
+            std::cout << i << binStart << binEnd << std::endl;
         }
 
         for (int i=0; i<numBars_; ++i) {
