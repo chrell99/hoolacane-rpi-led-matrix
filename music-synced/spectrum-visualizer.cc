@@ -49,7 +49,7 @@ int processArguments(int argc, char *argv[], double *freqFrom, double *freqTo, u
 
     std::cout << "Frequency Range: " << *freqFrom << " Hz to " << *freqTo << " Hz" << std::endl;
     std::cout << "Max Brightness: " << static_cast<int>(*maxBrightness) << std::endl;
-    std::cout << "Min dB: " << *dBMax << std::endl;
+    std::cout << "Min dB: " << *dBMin << std::endl;
     std::cout << "Max dB: " << *dBMax << std::endl;
 
     return 0;
