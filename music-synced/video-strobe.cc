@@ -264,10 +264,6 @@ static bool LoadImageAndScale(const char *filename,
 }
 
 void DisplayAnimation(const FileInfo *file, RGBMatrix *matrix, FrameCanvas *offscreen_canvas, snd_pcm_t *&pcm_handle) {
-  
-  int buffer_size = BUFFER_SIZE;
-  std::vector<short> buffer(buffer_size);
-  std::vector<double> magnitudesDB;
 
   const tmillis_t duration_ms = (file->is_multi_frame
                                  ? file->params.anim_duration_ms
@@ -284,6 +280,11 @@ void DisplayAnimation(const FileInfo *file, RGBMatrix *matrix, FrameCanvas *offs
        ++k) 
   {
     uint32_t delay_us = 0;
+
+    int buffer_size = BUFFER_SIZE;
+    std::vector<short> buffer(buffer_size);
+    std::vector<double> magnitudesDB;
+
     while (!interrupt_received && GetTimeInMillis() <= end_time_ms
            && reader.GetNext(offscreen_canvas, &delay_us)) {
       const tmillis_t anim_delay_ms = override_anim_delay >= 0 ? override_anim_delay : delay_us / 1000;
