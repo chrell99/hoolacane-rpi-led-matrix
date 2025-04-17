@@ -73,7 +73,10 @@ int main(int argc, char *argv[]){
     RGBMatrix *matrix = RGBMatrix::CreateFromOptions(options, rOptions);
     matrix->SetBrightness(brightness);
 
-    MatrixStrobe(matrix);
+    signal(SIGTERM, InterruptHandler);
+    signal(SIGINT, InterruptHandler);
+
+    MatrixStrobe(matrix, onTimems, offTimems, brightness);
 
     matrix->Clear();
     delete matrix;
