@@ -44,8 +44,17 @@
 
 #include <iostream>
 #include <alsa/asoundlib.h>
+#include <cmath>
+#include <vector>
 #include <fftw3.h>
+#include <chrono>
 #include <iomanip>
+
+#include "led-matrix.h"
+#include <unistd.h>
+#include <math.h>
+#include <stdio.h>
+#include <signal.h>
 
 #define PCM_DEVICE "hw:0,0" // USB Dongle audio input
 #define SAMPLE_RATE 44100   // 44.1 kHz sample rate
