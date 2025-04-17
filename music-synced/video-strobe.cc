@@ -264,7 +264,7 @@ void DisplayAnimation(const FileInfo *file,
   int buffer_size = BUFFER_SIZE;
 
   if (configure_pcm_device(pcm_handle, params, format, rate, channels, buffer_size) < 0) {
-      return -1; 
+      return; 
   }
 
   std::vector<short> buffer(buffer_size);
