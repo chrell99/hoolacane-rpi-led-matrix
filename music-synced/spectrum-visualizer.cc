@@ -118,14 +118,16 @@ std::vector<double> computeFFT(std::vector<short>& buffer) {
 void calcBarHeights(int fftSize, int sampleRate, int minFreq, int maxFreq, int numBars,
     const std::vector<double>& magnitudes, int* barHeights,
     float dBMin = 80.0f, float dBMax = 110.0f, int height = 100) {
-    std::vector<float> logFreqEdges(numBars + 1);
-    float logMin = std::log10(minFreq);
-    float logMax = std::log10(maxFreq);
+
+    std::vector<float> melFreqEdges(numBars + 1);
+
+    float melMin = 2595.0f * log10f(1.0f + minFreq / 700.0f);
+    float melMax = 2595.0f * log10f(1.0f + maxFreq / 700.0f);
 
     for (int i = 0; i <= numBars; i++) {
         float t = static_cast<float>(i) / numBars;
-        float logFreq = logMin + t * (logMax - logMin);
-        logFreqEdges[i] = std::pow(10.0f, logFreq);
+        float mel = melMin + t * (melMax - melMin);
+        melFreqEdges[i] = 700.0f * (powf(10.0f, mel / 2595.0f) - 1.0f);
     }
 
     auto freqToBin = [&](float freq) -> int {
@@ -135,7 +137,7 @@ void calcBarHeights(int fftSize, int sampleRate, int minFreq, int maxFreq, int n
 
     std::vector<int> binEdges(numBars + 1);
     for (int i = 0; i <= numBars; i++) {
-        binEdges[i] = freqToBin(logFreqEdges[i]);
+        binEdges[i] = freqToBin(melFreqEdges[i]);
     }
 
     for (int i = 0; i < numBars; i++) {
