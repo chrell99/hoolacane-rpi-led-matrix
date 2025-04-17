@@ -42,6 +42,15 @@
 #include <Magick++.h>
 #include <magick/image.h>
 
+#include <iostream>
+#include <alsa/asoundlib.h>
+#include <fftw3.h>
+#include <iomanip>
+
+#define PCM_DEVICE "hw:0,0" // USB Dongle audio input
+#define SAMPLE_RATE 44100   // 44.1 kHz sample rate
+#define BUFFER_SIZE 1024
+
 using rgb_matrix::Canvas;
 using rgb_matrix::FrameCanvas;
 using rgb_matrix::RGBMatrix;
@@ -84,6 +93,78 @@ static void SleepMillis(tmillis_t milli_seconds) {
   ts.tv_nsec = (milli_seconds % 1000) * 1000000;
   nanosleep(&ts, NULL);
 }
+
+//THE BULLSHIT
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
+template <typename T>
+T clamp(T value, T minVal, T maxVal) {
+    return std::max(minVal, std::min(value, maxVal));
+}
+
+int configure_pcm_device(snd_pcm_t *&pcm_handle, snd_pcm_hw_params_t *&params,
+  snd_pcm_format_t format, unsigned int rate, int channels, int buffer_size)
+{
+  if (snd_pcm_open(&pcm_handle, PCM_DEVICE, SND_PCM_STREAM_CAPTURE, 0) < 0)
+  {
+  std::cerr << "Failed to open PCM device" << std::endl;
+  return -1;
+  }
+
+  snd_pcm_hw_params_alloca(&params);
+  if (snd_pcm_hw_params_any(pcm_handle, params) < 0 ||
+  snd_pcm_hw_params_set_access(pcm_handle, params, SND_PCM_ACCESS_RW_INTERLEAVED) < 0 ||
+  snd_pcm_hw_params_set_format(pcm_handle, params, format) < 0 ||
+  snd_pcm_hw_params_set_rate_near(pcm_handle, params, &rate, 0) < 0 ||
+  snd_pcm_hw_params_set_channels(pcm_handle, params, channels) < 0 ||
+  snd_pcm_hw_params(pcm_handle, params) < 0)
+  {
+  std::cerr << "Failed to configure PCM device" << std::endl;
+  return -1;
+  }
+
+  if (snd_pcm_prepare(pcm_handle) < 0)
+  {
+  std::cerr << "Failed to prepare PCM device" << std::endl;
+  return -1; 
+  }
+
+  std::cout << "Succesfully opened the PCM device" << std::endl;
+  return 0; 
+}
+
+std::vector<double> computeFFT(std::vector<short>& buffer) {
+  int N = BUFFER_SIZE;
+  fftw_complex *in, *out;
+  fftw_plan plan;
+
+  in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
+  out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
+
+  plan = fftw_plan_dft_1d(N, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
+
+  for (int i = 0; i < N; i++) {
+      double window = 0.5 * (1 - cos((2 * M_PI * i) / (N - 1)));
+      in[i][0] = buffer[i] * window;
+      in[i][1] = 0.0;
+  }
+
+  fftw_execute(plan);
+
+  std::vector<double> magnitudesDB(N / 2);
+  for (int i = 0; i < N / 2; i++) {
+      double mag = sqrt(out[i][0] * out[i][0] + out[i][1] * out[i][1]);
+      magnitudesDB[i] = 20.0 * log10(mag + 1e-10);
+  }
+
+  fftw_destroy_plan(plan);
+  fftw_free(in);
+  fftw_free(out);
+
+  return magnitudesDB;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 static void StoreInStream(const Magick::Image &img, int delay_time_us,
                           bool do_center,
@@ -175,6 +256,20 @@ static bool LoadImageAndScale(const char *filename,
 
 void DisplayAnimation(const FileInfo *file,
                       RGBMatrix *matrix, FrameCanvas *offscreen_canvas) {
+  snd_pcm_t *pcm_handle;
+  snd_pcm_hw_params_t *params;
+  snd_pcm_format_t format = SND_PCM_FORMAT_S16_LE;
+  unsigned int rate = SAMPLE_RATE;
+  int channels = 1;
+  int buffer_size = BUFFER_SIZE;
+
+  if (configure_pcm_device(pcm_handle, params, format, rate, channels, buffer_size) < 0) {
+      return -1; 
+  }
+
+  std::vector<short> buffer(buffer_size);
+  std::vector<double> magnitudesDB;
+
   const tmillis_t duration_ms = (file->is_multi_frame
                                  ? file->params.anim_duration_ms
                                  : file->params.wait_ms);
@@ -183,21 +278,19 @@ void DisplayAnimation(const FileInfo *file,
   const tmillis_t end_time_ms = GetTimeInMillis() + duration_ms;
   const tmillis_t override_anim_delay = file->params.anim_delay_ms;
 
-  fprintf(stderr, "loops: %d, end_time_ms: %llu, override_anim_delay: %llu\n",
-    loops, (unsigned long long)end_time_ms, (unsigned long long)override_anim_delay);
-
   for (int k = 0;
        (loops < 0 || k < loops)
          && !interrupt_received
          && GetTimeInMillis() < end_time_ms;
        ++k) 
   {
-    fprintf(stderr, "For Loop Reset\n");
     uint32_t delay_us = 0;
     while (!interrupt_received && GetTimeInMillis() <= end_time_ms
            && reader.GetNext(offscreen_canvas, &delay_us)) {
       const tmillis_t anim_delay_ms = override_anim_delay >= 0 ? override_anim_delay : delay_us / 1000;
       const tmillis_t start_wait_ms = GetTimeInMillis();
+      snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
+      magnitudesDB = computeFFT(buffer);
       offscreen_canvas = matrix->SwapOnVSync(offscreen_canvas, file->params.vsync_multiple);
       const tmillis_t time_already_spent = GetTimeInMillis() - start_wait_ms;
       SleepMillis(anim_delay_ms - time_already_spent);
