@@ -250,6 +250,7 @@ int main(int argc, char *argv[]){
                 }
             }
         }
+        usleep(20000);
 
     }
 
