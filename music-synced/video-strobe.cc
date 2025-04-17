@@ -265,16 +265,7 @@ static bool LoadImageAndScale(const char *filename,
 
 void DisplayAnimation(const FileInfo *file,
                       RGBMatrix *matrix, FrameCanvas *offscreen_canvas) {
-  snd_pcm_t *pcm_handle;
-  snd_pcm_hw_params_t *params;
-  snd_pcm_format_t format = SND_PCM_FORMAT_S16_LE;
-  unsigned int rate = SAMPLE_RATE;
-  int channels = 1;
-  int buffer_size = BUFFER_SIZE;
-
-  if (configure_pcm_device(pcm_handle, params, format, rate, channels, buffer_size) < 0) {
-      return; 
-  }
+  
 
   std::vector<short> buffer(buffer_size);
   std::vector<double> magnitudesDB;
@@ -298,8 +289,6 @@ void DisplayAnimation(const FileInfo *file,
            && reader.GetNext(offscreen_canvas, &delay_us)) {
       const tmillis_t anim_delay_ms = override_anim_delay >= 0 ? override_anim_delay : delay_us / 1000;
       const tmillis_t start_wait_ms = GetTimeInMillis();
-      snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
-      magnitudesDB = computeFFT(buffer);
       offscreen_canvas = matrix->SwapOnVSync(offscreen_canvas, file->params.vsync_multiple);
       const tmillis_t time_already_spent = GetTimeInMillis() - start_wait_ms;
       SleepMillis(anim_delay_ms - time_already_spent);
@@ -355,6 +344,17 @@ static int usage(const char *progname) {
 }
 
 int main(int argc, char *argv[]) {
+  snd_pcm_t *pcm_handle;
+  snd_pcm_hw_params_t *params;
+  snd_pcm_format_t format = SND_PCM_FORMAT_S16_LE;
+  unsigned int rate = SAMPLE_RATE;
+  int channels = 1;
+  int buffer_size = BUFFER_SIZE;
+
+  if (configure_pcm_device(pcm_handle, params, format, rate, channels, buffer_size) < 0) {
+      return -1; 
+  }
+
   Magick::InitializeMagick(*argv);
 
   RGBMatrix::Options matrix_options;
