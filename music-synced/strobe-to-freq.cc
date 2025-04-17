@@ -161,7 +161,7 @@ int main(int argc, char *argv[]){
 
     while (true) {
         snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
-        magnitudesDB = computeFFT(buffer, frequency);
+        magnitudesDB = computeFFT(buffer);
 
         if(magnitudesDB[2] > (dBMax - 10)){
             matrix->Fill(255, 255, 255);
