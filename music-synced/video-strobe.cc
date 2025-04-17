@@ -265,10 +265,6 @@ static bool LoadImageAndScale(const char *filename,
 
 void DisplayAnimation(const FileInfo *file,
                       RGBMatrix *matrix, FrameCanvas *offscreen_canvas) {
-  
-
-  std::vector<short> buffer(buffer_size);
-  std::vector<double> magnitudesDB;
 
   const tmillis_t duration_ms = (file->is_multi_frame
                                  ? file->params.anim_duration_ms
