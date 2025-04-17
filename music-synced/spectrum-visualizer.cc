@@ -30,9 +30,6 @@ using rgb_matrix::RGBMatrix;
 const int NUM_BINS = BUFFER_SIZE / 2;  // only half is useful in real FFT
 const int HISTORY_SIZE = 43;  // about 1 second at 43 fps
 
-int LOW_BIN;
-int HIGH_BIN;
-
 template <typename T>
 T clamp(T value, T minVal, T maxVal) {
     return std::max(minVal, std::min(value, maxVal));
@@ -118,19 +115,55 @@ std::vector<double> computeFFT(std::vector<short>& buffer) {
     return magnitudesDB;
 }
 
+void calcBarHeights(int fftSize, int sampleRate, int minFreq, int maxFreq, int numBars,
+    const std::vector<float>& magnitudes, std::vector<int>& barHeights,
+    float dBMin = -100.0f, float dBMax = 0.0f, int height = 100) {
+    std::vector<float> logFreqEdges(numBars + 1);
+    float logMin = std::log10(minFreq);
+    float logMax = std::log10(maxFreq);
+
+    for (int i = 0; i <= numBars; i++) {
+        float t = static_cast<float>(i) / numBars;
+        float logFreq = logMin + t * (logMax - logMin);
+        logFreqEdges[i] = std::pow(10.0f, logFreq);
+    }
+
+    auto freqToBin = [&](float freq) -> int {
+        int bin = static_cast<int>((freq / sampleRate) * fftSize);
+        return clamp(bin, 0, fftSize / 2 - 1);
+    };
+
+    std::vector<int> binEdges(numBars + 1);
+    for (int i = 0; i <= numBars; i++) {
+        binEdges[i] = freqToBin(logFreqEdges[i]);
+    }
+
+    for (int i = 0; i < numBars; i++) {
+        float sum = 0.0f;
+        for (int b = binEdges[i]; b < binEdges[i + 1]; b++) {
+            sum += magnitudes[b];
+        }
+        int binCount = binEdges[i + 1] - binEdges[i];
+        float avg = (binCount > 0) ? sum / binCount : dBMin;
+
+        avg = clamp(avg, dBMin, dBMax);
+        float normalized = (avg - dBMin) / (dBMax - dBMin);
+
+        barHeights[i] = static_cast<int>(normalized * height);
+    }
+}
+
 int main(int argc, char *argv[]){
     //************ INPUT VARS ************/
     double freqFrom = 0.0;
     double freqTo = 20000.0;
     uint8_t maxbrightness = 80; 
     double dBMax = 130;
+    double dBMin = 80;
 
     if(processArguments(argc, argv, &freqFrom, &freqTo, &maxbrightness, &dBMax) < 0){
         return -1;
     }
-
-    LOW_BIN = static_cast<int>(round(freqFrom / (SAMPLE_RATE / BUFFER_SIZE)));
-    HIGH_BIN = static_cast<int>(round(freqTo / (SAMPLE_RATE / BUFFER_SIZE)));
 
     //************ SOUND INIT ************/
     snd_pcm_t *pcm_handle;
@@ -162,7 +195,7 @@ int main(int argc, char *argv[]){
     matrix->SetBrightness(maxbrightness);
     
     std::vector<short> buffer(buffer_size);
-    std::vector<double> magnitudes;
+    std::vector<double> magnitudesDB;
 
     int numBars_ = 24; 
     const int width = matrix->width();
@@ -176,29 +209,14 @@ int main(int argc, char *argv[]){
 
     while (true) {
         snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
-        magnitudes = computeFFT(buffer);
-        int fftSize = magnitudes.size();
-        double temp = 1;
-        int lastBinEnd = 1;
-        for (int i = 0; i < 24; i++){
+        magnitudesDB = computeFFT(buffer);
 
-            int binStart = lastBinEnd;
-            int binEnd   = lastBinEnd + (int)temp;
-            lastBinEnd = binEnd;
-            temp += 1.7;
+        int fftSize = magnitudesDB.size();
 
-            double sum = 0;
-            for (int b = binStart; b < binEnd; ++b) {
-                sum += magnitudes[b]; 
-            }
-            double avg = sum / (binEnd - binStart);
+        calcBarHeights(fftSize, SAMPLE_RATE, freqFrom, freqTo, numBars_, magnitudesDB, barHeights_);
 
-            double dBMin = 80;
-            avg = clamp(avg, dBMin, dBMax);
-            double normalized = (avg - dBMin) / (dBMax - dBMin);
-
-            barHeights_[i] = static_cast<int>(normalized * height_);
-            std::cout << i << binStart << binEnd << std::endl;
+        for (int i = 0; i < numBars; ++i) {
+            cout << "Bar " << i << ": " << barHeights[i] << endl;
         }
 
         for (int i=0; i<numBars_; ++i) {
