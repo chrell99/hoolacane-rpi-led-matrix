@@ -136,12 +136,17 @@ void calcBarHeights(int fftSize, int sampleRate, int minFreq, int maxFreq, int n
     std::vector<int> binEdges(numBars + 1);
     for (int i = 0; i <= numBars; i++) {
         binEdges[i] = freqToBin(logFreqEdges[i]);
-        std::cout << i << ": " << binEdges[i] << std::endl;
     }
 
+    int binStart = 0;
+    int prevBinEnd = 0;
     for (int i = 0; i < numBars; i++) {
+
+        binStart = prevBinEnd;
+        prevBinEnd = std::max(binStart + 1, binEdges[i+1])
+        std::cout << i << ": " << binStart << " " << prevBinEnd << std::endl;
         float sum = 0.0f;
-        for (int b = binEdges[i]; b < binEdges[i + 1]; b++) {
+        for (int b = binStart; b < prevBinEnd; b++) {
             sum += magnitudes[b];
         }
         int binCount = binEdges[i + 1] - binEdges[i];
