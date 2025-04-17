@@ -35,19 +35,21 @@ T clamp(T value, T minVal, T maxVal) {
     return std::max(minVal, std::min(value, maxVal));
 }
 
-int processArguments(int argc, char *argv[], double *freqFrom, double *freqTo, uint8_t *maxBrightness, double *dBMax) {
-    if (argc < 5) {
-        std::cerr << "Usage: " << argv[0] << " <frequency_from> <frequency_to> <brightness> <dBMax>" << std::endl;
+int processArguments(int argc, char *argv[], double *freqFrom, double *freqTo, uint8_t *maxBrightness, double *dBMin, double *dBMax) {
+    if (argc < 6) {
+        std::cerr << "Usage: " << argv[0] << " <frequency_from> <frequency_to> <brightness> <dBMin> <dBMax>" << std::endl;
         return -1;
     }
 
     *freqFrom = std::atof(argv[1]); 
     *freqTo = std::atof(argv[2]); 
     *maxBrightness = static_cast<uint8_t>(std::stoi(argv[3]));
-    *dBMax = std::atof(argv[4]);
+    *dBMin = std::atof(argv[4]);
+    *dBMax = std::atof(argv[5]);
 
     std::cout << "Frequency Range: " << *freqFrom << " Hz to " << *freqTo << " Hz" << std::endl;
     std::cout << "Max Brightness: " << static_cast<int>(*maxBrightness) << std::endl;
+    std::cout << "Min dB: " << *dBMax << std::endl;
     std::cout << "Max dB: " << *dBMax << std::endl;
 
     return 0;
@@ -159,11 +161,11 @@ int main(int argc, char *argv[]){
     //************ INPUT VARS ************/
     double freqFrom = 0.0;
     double freqTo = 20000.0;
-    uint8_t maxbrightness = 80; 
+    uint8_t maxbrightness = 80;
+    double dBMin = 80; 
     double dBMax = 130;
-    double dBMin = 80;
 
-    if(processArguments(argc, argv, &freqFrom, &freqTo, &maxbrightness, &dBMax) < 0){
+    if(processArguments(argc, argv, &freqFrom, &freqTo, &maxbrightness, &dBMin, &dBMax) < 0){
         return -1;
     }
 
