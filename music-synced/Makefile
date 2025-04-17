@@ -4,7 +4,7 @@ CXXFLAGS = -Wall -O3 -g -Wextra -Wno-unused-parameter -I../include
 LDFLAGS = -L../lib -lrgbmatrix -lrt -lm -lpthread -lfftw3 -lasound
 
 # Source Files
-SOURCES = spectrum-visualizer.cc  strobe-to-freq.cc
+SOURCES = spectrum-visualizer.cc  strobe-to-freq.cc strobe.cc
 EXECUTABLES = $(SOURCES:.cc=)
 
 # Default Target: Build All Executables
