@@ -6,3 +6,5 @@
 .direnv
 .vscode
 /tests/*
+/stream/*
+/img/*
