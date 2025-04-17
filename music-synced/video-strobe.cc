@@ -175,7 +175,6 @@ static bool LoadImageAndScale(const char *filename,
 
 void DisplayAnimation(const FileInfo *file,
                       RGBMatrix *matrix, FrameCanvas *offscreen_canvas) {
-  fprintf(stderr, "DisplayAnimation beginning\n");
   const tmillis_t duration_ms = (file->is_multi_frame
                                  ? file->params.anim_duration_ms
                                  : file->params.wait_ms);
@@ -183,24 +182,29 @@ void DisplayAnimation(const FileInfo *file,
   int loops = file->params.loops;
   const tmillis_t end_time_ms = GetTimeInMillis() + duration_ms;
   const tmillis_t override_anim_delay = file->params.anim_delay_ms;
+
+  fprintf(stderr, "loops: %d, end_time_ms: %llu, override_anim_delay: %llu\n",
+    loops, (unsigned long long)end_time_ms, (unsigned long long)override_anim_delay);
+
   for (int k = 0;
        (loops < 0 || k < loops)
          && !interrupt_received
          && GetTimeInMillis() < end_time_ms;
-       ++k) {
+       ++k) 
+  {
+    fprintf(stderr, "For Loop Reset\n");
     uint32_t delay_us = 0;
     while (!interrupt_received && GetTimeInMillis() <= end_time_ms
            && reader.GetNext(offscreen_canvas, &delay_us)) {
-      const tmillis_t anim_delay_ms =
-        override_anim_delay >= 0 ? override_anim_delay : delay_us / 1000;
+      const tmillis_t anim_delay_ms = override_anim_delay >= 0 ? override_anim_delay : delay_us / 1000;
       const tmillis_t start_wait_ms = GetTimeInMillis();
-      offscreen_canvas = matrix->SwapOnVSync(offscreen_canvas,
-                                             file->params.vsync_multiple);
+      offscreen_canvas = matrix->SwapOnVSync(offscreen_canvas, file->params.vsync_multiple);
       const tmillis_t time_already_spent = GetTimeInMillis() - start_wait_ms;
       SleepMillis(anim_delay_ms - time_already_spent);
     }
     reader.Rewind();
   }
+
 }
 
 static int usage(const char *progname) {
