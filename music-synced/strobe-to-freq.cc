@@ -11,7 +11,6 @@
 #include <math.h>
 #include <stdio.h>
 #include <signal.h>
-#include <deque>
 
 #define PCM_DEVICE "hw:0,0" // USB Dongle audio input
 #define SAMPLE_RATE 44100   // 44.1 kHz sample rate
@@ -26,9 +25,6 @@
 
 using rgb_matrix::Canvas;
 using rgb_matrix::RGBMatrix;
-
-const int NUM_BINS = BUFFER_SIZE / 2;  // only half is useful in real FFT
-const int HISTORY_SIZE = 43;  // about 1 second at 43 fps
 
 template <typename T>
 T clamp(T value, T minVal, T maxVal) {
@@ -117,46 +113,6 @@ std::vector<double> computeFFT(std::vector<short>& buffer) {
     return magnitudesDB;
 }
 
-void calcBarHeights(int fftSize, int sampleRate, int minFreq, int maxFreq, int numBars,
-    const std::vector<double>& magnitudes, int* barHeights,
-    float dBMin = 80.0f, float dBMax = 110.0f, int height = 100) {
-
-    std::vector<float> melFreqEdges(numBars + 1);
-
-    float melMin = 2595.0f * log10f(1.0f + minFreq / 700.0f);
-    float melMax = 2595.0f * log10f(1.0f + maxFreq / 700.0f);
-
-    for (int i = 0; i <= numBars; i++) {
-        float t = static_cast<float>(i) / numBars;
-        float mel = melMin + t * (melMax - melMin);
-        melFreqEdges[i] = 700.0f * (powf(10.0f, mel / 2595.0f) - 1.0f);
-    }
-
-    auto freqToBin = [&](float freq) -> int {
-        int bin = static_cast<int>((freq / sampleRate) * fftSize);
-        return clamp(bin, 0, fftSize / 2 - 1);
-    };
-
-    std::vector<int> binEdges(numBars + 1);
-    for (int i = 0; i <= numBars; i++) {
-        binEdges[i] = freqToBin(melFreqEdges[i]);
-    }
-
-    for (int i = 0; i < numBars; i++) {
-        float sum = 0.0f;
-        for (int b = binEdges[i]; b < binEdges[i + 1]; b++) {
-            sum += magnitudes[b];
-        }
-        int binCount = binEdges[i + 1] - binEdges[i];
-        float avg = (binCount > 0) ? sum / binCount : dBMin;
-
-        avg = clamp(avg, dBMin, dBMax);
-        float normalized = (avg - dBMin) / (dBMax - dBMin);
-
-        barHeights[i] = static_cast<int>(normalized * height);
-    }
-}
-
 int main(int argc, char *argv[]){
     //************ INPUT VARS ************/
     double freqFrom = 0.0;
@@ -168,6 +124,7 @@ int main(int argc, char *argv[]){
     if(processArguments(argc, argv, &freqFrom, &freqTo, &maxbrightness, &dBMin, &dBMax) < 0){
         return -1;
     }
+
 
     //************ SOUND INIT ************/
     snd_pcm_t *pcm_handle;
@@ -197,61 +154,21 @@ int main(int argc, char *argv[]){
 
     RGBMatrix *matrix = RGBMatrix::CreateFromOptions(options, rOptions);
     matrix->SetBrightness(maxbrightness);
+
     
     std::vector<short> buffer(buffer_size);
     std::vector<double> magnitudesDB;
 
-    int numBars_ = 24; 
-    const int width = matrix->width();
-    int height_ = matrix->height();
-    int barWidth_ = width/numBars_;
-    int* barHeights_ = new int[numBars_];
-    int heightGreen_  = height_*4/12;
-    int heightYellow_ = height_*8/12;
-    int heightOrange_ = height_*10/12;
-    int heightRed_    = height_*12/12;
-
     while (true) {
         snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
-        magnitudesDB = computeFFT(buffer);
+        magnitudesDB = computeFFT(buffer, frequency);
 
-        int fftSize = magnitudesDB.size();
-
-        calcBarHeights(fftSize, SAMPLE_RATE, freqFrom, freqTo, numBars_, magnitudesDB, barHeights_, dBMin, dBMax, height_);
-
-        for (int i=0; i<numBars_; ++i) {
-            int y;
-            for (y=0; y<barHeights_[i]; ++y) {
-                if (y<heightGreen_) {
-                    for (int x=i*barWidth_; x<(i+1)*barWidth_; ++x) {
-                        matrix->SetPixel(x, height_-1-y, 0, 200, 0);
-                    }
-                }
-                else if (y<heightYellow_) {
-                    for (int x=i*barWidth_; x<(i+1)*barWidth_; ++x) {
-                        matrix->SetPixel(x, height_-1-y, 150, 150, 0);
-                    }
-                }
-                else if (y<heightOrange_) {
-                    for (int x=i*barWidth_; x<(i+1)*barWidth_; ++x) {
-                        matrix->SetPixel(x, height_-1-y, 250, 100, 0);
-                    }
-                }
-                else {
-                    for (int x=i*barWidth_; x<(i+1)*barWidth_; ++x) {
-                        matrix->SetPixel(x, height_-1-y, 200, 0, 0);
-                    }
-                }
-            }
-            // Anything above the bar should be black
-            for (; y<height_; ++y) {
-                for (int x=i*barWidth_; x<(i+1)*barWidth_; ++x) {
-                    matrix->SetPixel(x, height_-1-y, 0, 0, 0);
-                }
-            }
+        if(magnitudesDB[2] > (dBMax - 10)){
+            matrix->Fill(255, 255, 255);
         }
-        //Might interfere with the signal
-        //usleep(20000);
+        else{
+            matrix->Fill(0, 0, 0);
+        }
 
     }
 
