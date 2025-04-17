@@ -116,7 +116,7 @@ std::vector<double> computeFFT(std::vector<short>& buffer) {
 }
 
 void calcBarHeights(int fftSize, int sampleRate, int minFreq, int maxFreq, int numBars,
-    const std::vector<float>& magnitudes, std::vector<int>& barHeights,
+    const std::vector<double>& magnitudes, std::vector<int>& barHeights,
     float dBMin = -100.0f, float dBMax = 0.0f, int height = 100) {
     std::vector<float> logFreqEdges(numBars + 1);
     float logMin = std::log10(minFreq);
@@ -215,8 +215,8 @@ int main(int argc, char *argv[]){
 
         calcBarHeights(fftSize, SAMPLE_RATE, freqFrom, freqTo, numBars_, magnitudesDB, barHeights_);
 
-        for (int i = 0; i < numBars; ++i) {
-            cout << "Bar " << i << ": " << barHeights[i] << endl;
+        for (int i = 0; i < numBars_; i++) {
+            std::cout << "Bar " << i << ": " << barHeights_[i] << std::endl;
         }
 
         for (int i=0; i<numBars_; ++i) {
