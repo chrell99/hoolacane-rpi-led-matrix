@@ -263,8 +263,11 @@ static bool LoadImageAndScale(const char *filename,
   return true;
 }
 
-void DisplayAnimation(const FileInfo *file,
-                      RGBMatrix *matrix, FrameCanvas *offscreen_canvas) {
+void DisplayAnimation(const FileInfo *file, RGBMatrix *matrix, FrameCanvas *offscreen_canvas, snd_pcm_t *&pcm_handle) {
+  
+  int buffer_size = BUFFER_SIZE;
+  std::vector<short> buffer(buffer_size);
+  std::vector<double> magnitudesDB;
 
   const tmillis_t duration_ms = (file->is_multi_frame
                                  ? file->params.anim_duration_ms
@@ -285,6 +288,9 @@ void DisplayAnimation(const FileInfo *file,
            && reader.GetNext(offscreen_canvas, &delay_us)) {
       const tmillis_t anim_delay_ms = override_anim_delay >= 0 ? override_anim_delay : delay_us / 1000;
       const tmillis_t start_wait_ms = GetTimeInMillis();
+      snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
+      magnitudesDB = computeFFT(buffer);
+      fprintf(stderr, "83Hz: %f\n", magnitudesDB[2]);
       offscreen_canvas = matrix->SwapOnVSync(offscreen_canvas, file->params.vsync_multiple);
       const tmillis_t time_already_spent = GetTimeInMillis() - start_wait_ms;
       SleepMillis(anim_delay_ms - time_already_spent);
@@ -609,7 +615,7 @@ int main(int argc, char *argv[]) {
       std::random_shuffle(file_imgs.begin(), file_imgs.end());
     }
     for (size_t i = 0; i < file_imgs.size() && !interrupt_received; ++i) {
-      DisplayAnimation(file_imgs[i], matrix, offscreen_canvas);
+      DisplayAnimation(file_imgs[i], matrix, offscreen_canvas, pcm_handle);
     }
   } while (do_forever && !interrupt_received);
 
