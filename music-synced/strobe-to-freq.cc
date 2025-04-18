@@ -31,22 +31,17 @@ T clamp(T value, T minVal, T maxVal) {
     return std::max(minVal, std::min(value, maxVal));
 }
 
-int processArguments(int argc, char *argv[], double *freqFrom, double *freqTo, uint8_t *maxBrightness, double *dBMin, double *dBMax) {
-    if (argc < 6) {
-        std::cerr << "Usage: " << argv[0] << " <frequency_from> <frequency_to> <brightness> <dBMin> <dBMax>" << std::endl;
+int processArguments(int argc, char *argv[], int *brightness, double *dBThreshold) {
+    if (argc < 3) {
+        std::cerr << "Usage: " << argv[0] << " <brightness> <dBThreshold>" << std::endl;
         return -1;
     }
 
-    *freqFrom = std::atof(argv[1]); 
-    *freqTo = std::atof(argv[2]); 
-    *maxBrightness = static_cast<uint8_t>(std::stoi(argv[3]));
-    *dBMin = std::atof(argv[4]);
-    *dBMax = std::atof(argv[5]);
+    *brightness = static_cast<int>(std::stoi(argv[1]));
+    *dBThreshold = static_cast<int>(std::stoi(argv[2]));
 
-    std::cout << "Frequency Range: " << *freqFrom << " Hz to " << *freqTo << " Hz" << std::endl;
-    std::cout << "Max Brightness: " << static_cast<int>(*maxBrightness) << std::endl;
-    std::cout << "Min dB: " << *dBMin << std::endl;
-    std::cout << "Max dB: " << *dBMax << std::endl;
+    std::cout << "Brightness: " << static_cast<int>(*brightness) << std::endl;
+    std::cout << "dB Threshold: " << static_cast<int>(*dBThreshold) << std::endl;
 
     return 0;
 }
@@ -115,13 +110,10 @@ std::vector<double> computeFFT(std::vector<short>& buffer) {
 
 int main(int argc, char *argv[]){
     //************ INPUT VARS ************/
-    double freqFrom = 0.0;
-    double freqTo = 20000.0;
-    uint8_t maxbrightness = 80;
-    double dBMin = 80; 
-    double dBMax = 130;
+    int brightness = 80;
+    double dBThreshold = 130;
 
-    if(processArguments(argc, argv, &freqFrom, &freqTo, &maxbrightness, &dBMin, &dBMax) < 0){
+    if(processArguments(argc, argv, &brightness, &dBThreshold) < 0){
         return -1;
     }
 
@@ -163,7 +155,13 @@ int main(int argc, char *argv[]){
         snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
         magnitudesDB = computeFFT(buffer);
 
-        if(magnitudesDB[2] > (dBMax - 10)){
+        double sum = 0;
+        for(int i = 0; i < 5; i++){
+            sum += magnitudesDB[i]
+        }
+        double avg = sum/5; 
+
+        if(avg > dBThreshold){
             matrix->Fill(255, 255, 255);
         }
         else{
