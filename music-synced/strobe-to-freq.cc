@@ -153,15 +153,9 @@ int main(int argc, char *argv[]){
 
     while (true) {
         snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
-        magnitudesDB = computeFFT(buffer);
+        magnitudesDB = computeFFT(buffer); 
 
-        double sum = 0;
-        for(int i = 0; i < 5; i++){
-            sum += magnitudesDB[i];
-        }
-        double avg = sum/5; 
-
-        if(avg > dBThreshold){
+        if((magnitudesDB[1] > dBThreshold) || (magnitudesDB[2] > dBThreshold) || (magnitudesDB[3] > dBThreshold)){
             matrix->Fill(255, 255, 255);
         }
         else{
