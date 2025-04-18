@@ -145,7 +145,7 @@ int main(int argc, char *argv[]){
     rOptions.gpio_slowdown = 2;
 
     RGBMatrix *matrix = RGBMatrix::CreateFromOptions(options, rOptions);
-    matrix->SetBrightness(maxbrightness);
+    matrix->SetBrightness(brightness);
 
     
     std::vector<short> buffer(buffer_size);
@@ -157,7 +157,7 @@ int main(int argc, char *argv[]){
 
         double sum = 0;
         for(int i = 0; i < 5; i++){
-            sum += magnitudesDB[i]
+            sum += magnitudesDB[i];
         }
         double avg = sum/5; 
 
