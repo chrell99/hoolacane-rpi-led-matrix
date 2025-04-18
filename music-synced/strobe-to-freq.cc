@@ -155,7 +155,7 @@ int main(int argc, char *argv[]){
         snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
         magnitudesDB = computeFFT(buffer); 
 
-        if((magnitudesDB[1] > dBThreshold) || (magnitudesDB[2] > dBThreshold) || (magnitudesDB[3] > dBThreshold)){
+        if(magnitudesDB[2] > dBThreshold){
             matrix->Fill(255, 255, 255);
         }
         else{
