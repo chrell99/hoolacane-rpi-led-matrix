@@ -50,21 +50,18 @@ int main(int argc, char *argv[]) {
     if (argc > 1) brightness = std::stoi(argv[1]);
     if (argc > 2) sensitivity = std::stod(argv[2]);
 
-    // 2. Setup Sound
+    // Setup Sound
     snd_pcm_t *pcm_handle;
     if (configure_pcm_device(pcm_handle, SND_PCM_FORMAT_S16_LE, SAMPLE_RATE, 1) < 0) return -1;
 
-    // 3. Setup FFTW (Done ONCE outside the loop)
+    // Setup FFTW
     fftw_complex *in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * BUFFER_SIZE);
     fftw_complex *out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * BUFFER_SIZE);
     fftw_plan plan = fftw_plan_dft_1d(BUFFER_SIZE, in, out, FFTW_FORWARD, FFTW_MEASURE);
 
     // 4. Setup Matrix
     RGBMatrix::Options options;
-    options.rows = 32;
-    options.cols = 32;
-    options.chain_length = 3;
-    options.parallel = 3;
+    options.rows = 32; options.cols = 32; options.chain_length = 3; options.parallel = 3;
     options.hardware_mapping = "regular";
     rgb_matrix::RuntimeOptions rOptions;
     rOptions.gpio_slowdown = 2;
@@ -74,7 +71,9 @@ int main(int argc, char *argv[]) {
     // 5. Detection Variables
     std::vector<short> audio_buffer(BUFFER_SIZE);
     std::deque<double> history;
-    const int history_limit = 43; // ~1 second of audio history
+    const int history_limit = 25; // ~1 second of audio history
+    float current_brightness = 0.0;
+    float decay_rate = 0.85;
     
     std::cout << "Running... Press Ctrl+C to stop." << std::endl;
 
@@ -108,12 +107,17 @@ int main(int argc, char *argv[]) {
             avg_bass_energy /= history.size();
         }
 
-        // Trigger Logic: Spike must be > average * sensitivity
+        // 3. Trigger Logic
         if (current_bass_energy > (avg_bass_energy * sensitivity) && current_bass_energy > 1000) {
-            matrix->Fill(255, 255, 255); 
+            current_brightness = 255.0; // Instant "On" for the beat
         } else {
-            matrix->Fill(0, 0, 0);
+            current_brightness *= decay_rate; // Smooth "Fade out"
+            if (current_brightness < 2) current_brightness = 0;
         }
+
+        // 4. Apply to Matrix
+        int b = static_cast<int>(current_brightness);
+        matrix->Fill(b, b, b);
 
         // Update History
         history.push_back(current_bass_energy);
