@@ -35,9 +35,11 @@ T clamp(T value, T minVal, T maxVal) {
     return std::max(minVal, std::min(value, maxVal));
 }
 
-int processArguments(int argc, char *argv[], double *freqFrom, double *freqTo, uint8_t *maxBrightness, size_t *targetDNR, float *dropRate, float *riseSmooth) {
-    if (argc < 7) {
-        std::cerr << "Usage: " << argv[0] << " <frequency_from> <frequency_to> <brightness> <target dynamic range> <drop rate> <rise smoothness>" << std::endl;
+int processArguments(int argc, char *argv[], double *freqFrom, double *freqTo, 
+                     uint8_t *maxBrightness, size_t *targetDNR, float *dropRate, 
+                     float *riseSmooth, float *lerpFactor, float *historySecs) {
+    if (argc < 9) {
+        std::cerr << "Usage: " << argv[0] << " <frequency from> <frequency to> <brightness> <Dynamic range> <droprate> <rise smoothness> <lerp> <hist_secs>" << std::endl;
         return -1;
     }
 
@@ -47,12 +49,13 @@ int processArguments(int argc, char *argv[], double *freqFrom, double *freqTo, u
     *targetDNR = static_cast<size_t>(std::stoul(argv[4]));
     *dropRate = std::atof(argv[5]); 
     *riseSmooth = std::atof(argv[6]); 
+    *lerpFactor = std::atof(argv[7]);
+    *historySecs = std::atof(argv[8]);
 
-    std::cout << "Frequency Range: " << *freqFrom << " Hz to " << *freqTo << " Hz" << std::endl;
-    std::cout << "Max Brightness: " << static_cast<int>(*maxBrightness) << std::endl;
-    std::cout << "Target dynamic range: " << *targetDNR << std::endl;
-    std::cout << "Drop rate: " << *dropRate << std::endl;
-    std::cout << "Rise smoothness: " << *riseSmooth << std::endl;
+    std::cout << "--- Configuration ---" << std::endl;
+    std::cout << "Range: " << *freqFrom << "-" << *freqTo << "Hz | DNR: " << *targetDNR << "dB" << std::endl;
+    std::cout << "Droprate: " << *dropRate << " | rise smoothness: " << *riseSmooth << std::endl;
+    std::cout << "AGC Lerp: " << *lerpFactor << " | History: " << *historySecs << "s" << std::endl;
 
     return 0;
 }
@@ -161,42 +164,36 @@ void calcBarHeights(int fftSize, int sampleRate, int minFreq, int maxFreq, int n
 
 int main(int argc, char *argv[]){
     //************ INPUT VARS ************/
-    double freqFrom = 0.0;
-    double freqTo = 8000.0;
-    uint8_t maxbrightness = 80;
-    double autoDBMin = 60;              // Initial value to have a starting point
-    double autoDBMax = 100;             // Initial value to have a starting point
-    const float lerpFactor = 0.05f;     // Smoothness: 0.1 is fast, 0.01 is slow
-    const size_t maxHistoryLen = 43;    // ~1 second of history at 43fps
-    std::deque<double> maxHistory;      // Stores recent peak magnitudes
-    size_t targetDNR = 40;              // Dynamic range
-    float dropRate = 0.5f;        // Pixels to drop per frame
-    float riseSmooth = 0.8f;      // 1.0 = instant rise, lower = smoother rise
+    double freqFrom, freqTo;
+    uint8_t maxbrightness;
+    size_t targetDNR;
+    float dropRate, riseSmooth, lerpFactor, historySecs;
 
-    if(processArguments(argc, argv, &freqFrom, &freqTo, &maxbrightness, &targetDNR, &dropRate, &riseSmooth) < 0){
+    if(processArguments(argc, argv, &freqFrom, &freqTo, &maxbrightness, 
+                        &targetDNR, &dropRate, &riseSmooth, &lerpFactor, &historySecs) < 0){
         return -1;
     }
 
-    //************ SOUND INIT ************/
+    // CALCULATE HISTORY LENGTH based on audio timing
+    // frames = seconds * (samples_per_sec / samples_per_frame)
+    size_t maxHistoryLen = static_cast<size_t>(historySecs * (static_cast<float>(SAMPLE_RATE) / BUFFER_SIZE));
+    if (maxHistoryLen < 1) maxHistoryLen = 1;
+
+    // AGC State
+    double autoDBMin = 60;
+    double autoDBMax = 100;
+    std::deque<double> maxHistory;
+
+    // Standard audio setup
     snd_pcm_t *pcm_handle;
     snd_pcm_hw_params_t *params;
-    snd_pcm_format_t format = SND_PCM_FORMAT_S16_LE;
-    unsigned int rate = SAMPLE_RATE;
-    int channels = 1;
-    int buffer_size = BUFFER_SIZE;
-
-    if (configure_pcm_device(pcm_handle, params, format, rate, channels, buffer_size) < 0) {
-        return -1; 
-    }
+    if (configure_pcm_device(pcm_handle, params, SND_PCM_FORMAT_S16_LE, SAMPLE_RATE, 1, BUFFER_SIZE) < 0) return -1;
 
 
     //************ RGB MATRIX VARS ************/
     RGBMatrix::Options options;
     options.hardware_mapping = "regular";
-    options.rows = 32;
-    options.cols = 32;
-    options.chain_length = 3;
-    options.parallel = 3;
+    options.rows = 32; options.cols = 32; options.chain_length = 3; options.parallel = 3;
     options.show_refresh_rate = false;
     options.multiplexing = 1;
     options.pixel_mapper_config = "Rotate:270";
@@ -206,7 +203,7 @@ int main(int argc, char *argv[]){
     RGBMatrix *matrix = RGBMatrix::CreateFromOptions(options, rOptions);
     matrix->SetBrightness(maxbrightness);
     
-    std::vector<short> buffer(buffer_size);
+    std::vector<short> buffer(BUFFER_SIZE);
     std::vector<double> magnitudesDB;
 
     int numBars_ = 24; 
@@ -214,6 +211,7 @@ int main(int argc, char *argv[]){
     int height_ = matrix->height();
     int barWidth_ = width/numBars_;
     int* barHeights_ = new int[numBars_];
+    std::vector<float> smoothHeights(numBars_, 0.0f);
     int heightGreen_  = height_*4/12;
     int heightYellow_ = height_*8/12;
     int heightOrange_ = height_*10/12;
@@ -224,12 +222,9 @@ int main(int argc, char *argv[]){
     auto lastFpsTimestamp = std::chrono::steady_clock::now();
     double currentFps = 0.0;
 
-    // For smoothing changes
-    std::vector<float> smoothHeights(numBars_, 0.0f);
-
     while (true) {
         // Sound capture
-        snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
+        snd_pcm_readi(pcm_handle, buffer.data(), BUFFER_SIZE);
         magnitudesDB = computeFFT(buffer);
 
         // 2. AGC CALCULATION
