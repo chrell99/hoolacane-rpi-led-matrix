@@ -35,22 +35,20 @@ T clamp(T value, T minVal, T maxVal) {
     return std::max(minVal, std::min(value, maxVal));
 }
 
-int processArguments(int argc, char *argv[], double *freqFrom, double *freqTo, uint8_t *maxBrightness, double *dBMin, double *dBMax) {
-    if (argc < 6) {
-        std::cerr << "Usage: " << argv[0] << " <frequency_from> <frequency_to> <brightness> <dBMin> <dBMax>" << std::endl;
+int processArguments(int argc, char *argv[], double *freqFrom, double *freqTo, uint8_t *maxBrightness, size_t *targetDNR) {
+    if (argc < 5) {
+        std::cerr << "Usage: " << argv[0] << " <frequency_from> <frequency_to> <brightness> <target dynamic range>" << std::endl;
         return -1;
     }
 
     *freqFrom = std::atof(argv[1]); 
     *freqTo = std::atof(argv[2]); 
     *maxBrightness = static_cast<uint8_t>(std::stoi(argv[3]));
-    *dBMin = std::atof(argv[4]);
-    *dBMax = std::atof(argv[5]);
+    *targetDNR = static_cast<size_t>(std::stoul(argv[4]));
 
     std::cout << "Frequency Range: " << *freqFrom << " Hz to " << *freqTo << " Hz" << std::endl;
     std::cout << "Max Brightness: " << static_cast<int>(*maxBrightness) << std::endl;
-    std::cout << "Min dB: " << *dBMin << std::endl;
-    std::cout << "Max dB: " << *dBMax << std::endl;
+    std::cout << "Target dynamic range: " << targetDNR << std::endl;
 
     return 0;
 }
@@ -160,12 +158,16 @@ void calcBarHeights(int fftSize, int sampleRate, int minFreq, int maxFreq, int n
 int main(int argc, char *argv[]){
     //************ INPUT VARS ************/
     double freqFrom = 0.0;
-    double freqTo = 20000.0;
+    double freqTo = 8000.0;
     uint8_t maxbrightness = 80;
-    double dBMin = 80; 
-    double dBMax = 130;
+    double autoDBMin = 60;              // Initial value to have a starting point
+    double autoDBMax = 100;             // Initial value to have a starting point
+    const float lerpFactor = 0.05f;     // Smoothness: 0.1 is fast, 0.01 is slow
+    const size_t maxHistoryLen = 43;    // ~1 second of history at 43fps
+    std::deque<double> maxHistory;      // Stores recent peak magnitudes
+    size_t targetDNR = 40;                   // Dynamic range
 
-    if(processArguments(argc, argv, &freqFrom, &freqTo, &maxbrightness, &dBMin, &dBMax) < 0){
+    if(processArguments(argc, argv, &freqFrom, &freqTo, &maxbrightness, &targetDNR) < 0){
         return -1;
     }
 
@@ -217,10 +219,38 @@ int main(int argc, char *argv[]){
     double currentFps = 0.0;
 
     while (true) {
+        // Sound capture
         snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
         magnitudesDB = computeFFT(buffer);
 
-        calcBarHeights(magnitudesDB.size(), SAMPLE_RATE, freqFrom, freqTo, numBars_, magnitudesDB, barHeights_, dBMin, dBMax, height_);
+        // 2. AGC CALCULATION
+        double frameMax = -200.0;
+        // Find the highest magnitude in the current FFT frame
+        for (double val : magnitudesDB) {
+            if (val > frameMax) frameMax = val;
+        }
+
+        // Update history of peaks
+        maxHistory.push_back(frameMax);
+        if (maxHistory.size() > maxHistoryLen) maxHistory.pop_front();
+
+        // Calculate the target Max (average of recent peaks)
+        double targetMax = 0;
+        for (double m : maxHistory) targetMax += m;
+        targetMax /= maxHistory.size();
+
+        // Set a 40dB dynamic range window relative to the peak
+        double targetMin = targetMax - targetDNR;
+
+        // Smoothly "float" the current range toward the targets
+        autoDBMax = autoDBMax + (targetMax - autoDBMax) * lerpFactor;
+        autoDBMin = autoDBMin + (targetMin - autoDBMin) * lerpFactor;
+
+        // Safety clamps: prevent the UI from "hunting" in total silence
+        if (autoDBMax < 60) autoDBMax = 60; 
+        if (autoDBMin < 40) autoDBMin = 40;
+
+        calcBarHeights(magnitudesDB.size(), SAMPLE_RATE, freqFrom, freqTo, numBars_, magnitudesDB, barHeights_, autoDBMin, autoDBMax, height_);
 
         for (int i = 0; i < numBars_; ++i) {
             int y;
