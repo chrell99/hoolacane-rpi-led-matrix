@@ -35,9 +35,9 @@ T clamp(T value, T minVal, T maxVal) {
     return std::max(minVal, std::min(value, maxVal));
 }
 
-int processArguments(int argc, char *argv[], double *freqFrom, double *freqTo, uint8_t *maxBrightness, size_t *targetDNR) {
-    if (argc < 5) {
-        std::cerr << "Usage: " << argv[0] << " <frequency_from> <frequency_to> <brightness> <target dynamic range>" << std::endl;
+int processArguments(int argc, char *argv[], double *freqFrom, double *freqTo, uint8_t *maxBrightness, size_t *targetDNR, float *dropRate, float *riseSmooth) {
+    if (argc < 7) {
+        std::cerr << "Usage: " << argv[0] << " <frequency_from> <frequency_to> <brightness> <target dynamic range> <drop rate> <rise smoothness>" << std::endl;
         return -1;
     }
 
@@ -45,10 +45,14 @@ int processArguments(int argc, char *argv[], double *freqFrom, double *freqTo, u
     *freqTo = std::atof(argv[2]); 
     *maxBrightness = static_cast<uint8_t>(std::stoi(argv[3]));
     *targetDNR = static_cast<size_t>(std::stoul(argv[4]));
+    *dropRate = std::atof(argv[5]); 
+    *riseSmooth = std::atof(argv[6]); 
 
     std::cout << "Frequency Range: " << *freqFrom << " Hz to " << *freqTo << " Hz" << std::endl;
     std::cout << "Max Brightness: " << static_cast<int>(*maxBrightness) << std::endl;
-    std::cout << "Target dynamic range: " << targetDNR << std::endl;
+    std::cout << "Target dynamic range: " << *targetDNR << std::endl;
+    std::cout << "Drop rate: " << *dropRate << std::endl;
+    std::cout << "Rise smoothness: " << *riseSmooth << std::endl;
 
     return 0;
 }
@@ -165,9 +169,11 @@ int main(int argc, char *argv[]){
     const float lerpFactor = 0.05f;     // Smoothness: 0.1 is fast, 0.01 is slow
     const size_t maxHistoryLen = 43;    // ~1 second of history at 43fps
     std::deque<double> maxHistory;      // Stores recent peak magnitudes
-    size_t targetDNR = 40;                   // Dynamic range
+    size_t targetDNR = 40;              // Dynamic range
+    float dropRate = 0.5f;        // Pixels to drop per frame
+    float riseSmooth = 0.8f;      // 1.0 = instant rise, lower = smoother rise
 
-    if(processArguments(argc, argv, &freqFrom, &freqTo, &maxbrightness, &targetDNR) < 0){
+    if(processArguments(argc, argv, &freqFrom, &freqTo, &maxbrightness, &targetDNR, &dropRate, &riseSmooth) < 0){
         return -1;
     }
 
@@ -218,6 +224,9 @@ int main(int argc, char *argv[]){
     auto lastFpsTimestamp = std::chrono::steady_clock::now();
     double currentFps = 0.0;
 
+    // For smoothing changes
+    std::vector<float> smoothHeights(numBars_, 0.0f);
+
     while (true) {
         // Sound capture
         snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
@@ -253,8 +262,23 @@ int main(int argc, char *argv[]){
         calcBarHeights(magnitudesDB.size(), SAMPLE_RATE, freqFrom, freqTo, numBars_, magnitudesDB, barHeights_, autoDBMin, autoDBMax, height_);
 
         for (int i = 0; i < numBars_; ++i) {
+
+            // Smoothing the chnages in the bars height
+            float targetHeight = static_cast<float>(barHeights_[i]);
+
+            if (targetHeight > smoothHeights[i]) {
+                smoothHeights[i] = targetHeight * riseSmooth + smoothHeights[i] * (1.0f - riseSmooth);
+            } else {
+                smoothHeights[i] -= dropRate;
+            }
+
+            if (smoothHeights[i] < 0) smoothHeights[i] = 0;
+            
+            int visualHeight = static_cast<int>(smoothHeights[i]);
+
+            // Drawing to the panel
             int y;
-            for (y = 0; y < barHeights_[i]; ++y) {
+            for (y = 0; y < visualHeight; ++y) {
                 if (y < heightGreen_) {
                     for (int x = i * barWidth_; x < (i + 1) * barWidth_; ++x) 
                         matrix->SetPixel(x, height_ - 1 - y, 0, 200, 0);
