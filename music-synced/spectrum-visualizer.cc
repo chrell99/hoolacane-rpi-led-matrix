@@ -211,48 +211,55 @@ int main(int argc, char *argv[]){
     int heightOrange_ = height_*10/12;
     int heightRed_    = height_*12/12;
 
+    // Variables for FPS calculation
+    int frameCount = 0;
+    auto lastFpsTimestamp = std::chrono::steady_clock::now();
+    double currentFps = 0.0;
+
     while (true) {
         snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
         magnitudesDB = computeFFT(buffer);
 
-        int fftSize = magnitudesDB.size();
+        calcBarHeights(magnitudesDB.size(), SAMPLE_RATE, freqFrom, freqTo, numBars_, magnitudesDB, barHeights_, dBMin, dBMax, height_);
 
-        calcBarHeights(fftSize, SAMPLE_RATE, freqFrom, freqTo, numBars_, magnitudesDB, barHeights_, dBMin, dBMax, height_);
-
-        for (int i=0; i<numBars_; ++i) {
+        for (int i = 0; i < numBars_; ++i) {
             int y;
-            for (y=0; y<barHeights_[i]; ++y) {
-                if (y<heightGreen_) {
-                    for (int x=i*barWidth_; x<(i+1)*barWidth_; ++x) {
-                        matrix->SetPixel(x, height_-1-y, 0, 200, 0);
-                    }
-                }
-                else if (y<heightYellow_) {
-                    for (int x=i*barWidth_; x<(i+1)*barWidth_; ++x) {
-                        matrix->SetPixel(x, height_-1-y, 150, 150, 0);
-                    }
-                }
-                else if (y<heightOrange_) {
-                    for (int x=i*barWidth_; x<(i+1)*barWidth_; ++x) {
-                        matrix->SetPixel(x, height_-1-y, 250, 100, 0);
-                    }
-                }
-                else {
-                    for (int x=i*barWidth_; x<(i+1)*barWidth_; ++x) {
-                        matrix->SetPixel(x, height_-1-y, 200, 0, 0);
-                    }
+            for (y = 0; y < barHeights_[i]; ++y) {
+                if (y < heightGreen_) {
+                    for (int x = i * barWidth_; x < (i + 1) * barWidth_; ++x) 
+                        matrix->SetPixel(x, height_ - 1 - y, 0, 200, 0);
+                } else if (y < heightYellow_) {
+                    for (int x = i * barWidth_; x < (i + 1) * barWidth_; ++x) 
+                        matrix->SetPixel(x, height_ - 1 - y, 150, 150, 0);
+                } else if (y < heightOrange_) {
+                    for (int x = i * barWidth_; x < (i + 1) * barWidth_; ++x) 
+                        matrix->SetPixel(x, height_ - 1 - y, 250, 100, 0);
+                } else {
+                    for (int x = i * barWidth_; x < (i + 1) * barWidth_; ++x) 
+                        matrix->SetPixel(x, height_ - 1 - y, 200, 0, 0);
                 }
             }
-            // Anything above the bar should be black
-            for (; y<height_; ++y) {
-                for (int x=i*barWidth_; x<(i+1)*barWidth_; ++x) {
-                    matrix->SetPixel(x, height_-1-y, 0, 0, 0);
-                }
+            for (; y < height_; ++y) {
+                for (int x = i * barWidth_; x < (i + 1) * barWidth_; ++x) 
+                    matrix->SetPixel(x, height_ - 1 - y, 0, 0, 0);
             }
         }
-        //Might interfere with the signal
-        //usleep(20000);
 
+        frameCount++;
+        auto currentTime = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastFpsTimestamp).count();
+
+        if (elapsed >= 1000) {
+            currentFps = frameCount / (elapsed / 1000.0);
+            
+            // Print to console (using \r to overwrite the same line)
+            std::cout << "\rFPS: " << std::fixed << std::setprecision(1) << currentFps << "   " << std::flush;
+            
+            frameCount = 0;
+            lastFpsTimestamp = currentTime;
+        }
+
+        // usleep(20000); // Leave commented to get maximum possible FPS
     }
 
     if (matrix == NULL)
