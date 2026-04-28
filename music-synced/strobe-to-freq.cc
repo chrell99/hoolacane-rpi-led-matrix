@@ -2,14 +2,12 @@
 #include <alsa/asoundlib.h>
 #include <cmath>
 #include <vector>
+#include <deque>
 #include <fftw3.h>
 #include <chrono>
 #include <iomanip>
-
 #include "led-matrix.h"
 #include <unistd.h>
-#include <math.h>
-#include <stdio.h>
 #include <signal.h>
 
 #define PCM_DEVICE "hw:0,0" // USB Dongle audio input
@@ -26,148 +24,108 @@
 using rgb_matrix::Canvas;
 using rgb_matrix::RGBMatrix;
 
-template <typename T>
-T clamp(T value, T minVal, T maxVal) {
-    return std::max(minVal, std::min(value, maxVal));
-}
+// Global for cleanup
+bool keep_running = true;
+void intHandler(int dummy) { keep_running = false; }
 
-int processArguments(int argc, char *argv[], int *brightness, double *dBThreshold) {
-    if (argc < 3) {
-        std::cerr << "Usage: " << argv[0] << " <brightness> <dBThreshold>" << std::endl;
-        return -1;
-    }
-
-    *brightness = static_cast<int>(std::stoi(argv[1]));
-    *dBThreshold = static_cast<int>(std::stoi(argv[2]));
-
-    std::cout << "Brightness: " << static_cast<int>(*brightness) << std::endl;
-    std::cout << "dB Threshold: " << static_cast<int>(*dBThreshold) << std::endl;
-
+int configure_pcm_device(snd_pcm_t *&pcm_handle, snd_pcm_format_t format, unsigned int rate, int channels) {
+    if (snd_pcm_open(&pcm_handle, PCM_DEVICE, SND_PCM_STREAM_CAPTURE, 0) < 0) return -1;
+    snd_pcm_hw_params_t *params;
+    snd_pcm_hw_params_alloca(&params);
+    snd_pcm_hw_params_any(pcm_handle, params);
+    snd_pcm_hw_params_set_access(pcm_handle, params, SND_PCM_ACCESS_RW_INTERLEAVED);
+    snd_pcm_hw_params_set_format(pcm_handle, params, format);
+    snd_pcm_hw_params_set_rate_near(pcm_handle, params, &rate, 0);
+    snd_pcm_hw_params_set_channels(pcm_handle, params, channels);
+    snd_pcm_hw_params(pcm_handle, params);
     return 0;
 }
 
-int configure_pcm_device(snd_pcm_t *&pcm_handle, snd_pcm_hw_params_t *&params,
-                         snd_pcm_format_t format, unsigned int rate, int channels, int buffer_size)
-{
-    if (snd_pcm_open(&pcm_handle, PCM_DEVICE, SND_PCM_STREAM_CAPTURE, 0) < 0)
-    {
-        std::cerr << "Failed to open PCM device" << std::endl;
-        return -1;
-    }
+int main(int argc, char *argv[]) {
+    signal(SIGINT, intHandler);
 
-    snd_pcm_hw_params_alloca(&params);
-    if (snd_pcm_hw_params_any(pcm_handle, params) < 0 ||
-        snd_pcm_hw_params_set_access(pcm_handle, params, SND_PCM_ACCESS_RW_INTERLEAVED) < 0 ||
-        snd_pcm_hw_params_set_format(pcm_handle, params, format) < 0 ||
-        snd_pcm_hw_params_set_rate_near(pcm_handle, params, &rate, 0) < 0 ||
-        snd_pcm_hw_params_set_channels(pcm_handle, params, channels) < 0 ||
-        snd_pcm_hw_params(pcm_handle, params) < 0)
-    {
-        std::cerr << "Failed to configure PCM device" << std::endl;
-        return -1;
-    }
-
-    if (snd_pcm_prepare(pcm_handle) < 0)
-    {
-        std::cerr << "Failed to prepare PCM device" << std::endl;
-        return -1; 
-    }
-
-    std::cout << "Succesfully opened the PCM device" << std::endl;
-    return 0; 
-}
-
-std::vector<double> computeFFT(std::vector<short>& buffer) {
-    int N = BUFFER_SIZE;
-    fftw_complex *in, *out;
-    fftw_plan plan;
-
-    in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
-    out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * N);
-
-    plan = fftw_plan_dft_1d(N, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
-
-    for (int i = 0; i < N; i++) {
-        double window = 0.5 * (1 - cos((2 * M_PI * i) / (N - 1)));
-        in[i][0] = buffer[i] * window;
-        in[i][1] = 0.0;
-    }
-
-    fftw_execute(plan);
-
-    std::vector<double> magnitudesDB(N / 2);
-    for (int i = 0; i < N / 2; i++) {
-        double mag = sqrt(out[i][0] * out[i][0] + out[i][1] * out[i][1]);
-        magnitudesDB[i] = 20.0 * log10(mag + 1e-10);
-    }
-
-    fftw_destroy_plan(plan);
-    fftw_free(in);
-    fftw_free(out);
-
-    return magnitudesDB;
-}
-
-int main(int argc, char *argv[]){
-    //************ INPUT VARS ************/
+    // 1. Settings
     int brightness = 80;
-    double dBThreshold = 130;
+    double sensitivity = 1.3; // Multiplier: Trigger if current bass is 1.3x higher than average
+    if (argc > 1) brightness = std::stoi(argv[1]);
+    if (argc > 2) sensitivity = std::stod(argv[2]);
 
-    if(processArguments(argc, argv, &brightness, &dBThreshold) < 0){
-        return -1;
-    }
-
-
-    //************ SOUND INIT ************/
+    // 2. Setup Sound
     snd_pcm_t *pcm_handle;
-    snd_pcm_hw_params_t *params;
-    snd_pcm_format_t format = SND_PCM_FORMAT_S16_LE;
-    unsigned int rate = SAMPLE_RATE;
-    int channels = 1;
-    int buffer_size = BUFFER_SIZE;
+    if (configure_pcm_device(pcm_handle, SND_PCM_FORMAT_S16_LE, SAMPLE_RATE, 1) < 0) return -1;
 
-    if (configure_pcm_device(pcm_handle, params, format, rate, channels, buffer_size) < 0) {
-        return -1; 
-    }
+    // 3. Setup FFTW (Done ONCE outside the loop)
+    fftw_complex *in = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * BUFFER_SIZE);
+    fftw_complex *out = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * BUFFER_SIZE);
+    fftw_plan plan = fftw_plan_dft_1d(BUFFER_SIZE, in, out, FFTW_FORWARD, FFTW_MEASURE);
 
-
-    //************ RGB MATRIX VARS ************/
+    // 4. Setup Matrix
     RGBMatrix::Options options;
-    options.hardware_mapping = "regular";
     options.rows = 32;
     options.cols = 32;
     options.chain_length = 3;
     options.parallel = 3;
-    options.show_refresh_rate = false;
-    options.multiplexing = 1;
-    options.pixel_mapper_config = "Rotate:270";
+    options.hardware_mapping = "regular";
     rgb_matrix::RuntimeOptions rOptions;
     rOptions.gpio_slowdown = 2;
-
     RGBMatrix *matrix = RGBMatrix::CreateFromOptions(options, rOptions);
     matrix->SetBrightness(brightness);
 
+    // 5. Detection Variables
+    std::vector<short> audio_buffer(BUFFER_SIZE);
+    std::deque<double> history;
+    const int history_limit = 43; // ~1 second of audio history
     
-    std::vector<short> buffer(buffer_size);
-    std::vector<double> magnitudesDB;
+    std::cout << "Running... Press Ctrl+C to stop." << std::endl;
 
-    while (true) {
-        snd_pcm_readi(pcm_handle, buffer.data(), buffer_size);
-        magnitudesDB = computeFFT(buffer); 
-
-        if(magnitudesDB[2] > dBThreshold){
-            matrix->Fill(255, 255, 255);
+    while (keep_running) {
+        if (snd_pcm_readi(pcm_handle, audio_buffer.data(), BUFFER_SIZE) < 0) {
+            snd_pcm_prepare(pcm_handle);
+            continue;
         }
-        else{
+
+        // Apply Hann Window and load FFT
+        for (int i = 0; i < BUFFER_SIZE; i++) {
+            double window = 0.5 * (1 - cos((2 * M_PI * i) / (BUFFER_SIZE - 1)));
+            in[i][0] = audio_buffer[i] * window;
+            in[i][1] = 0.0;
+        }
+
+        fftw_execute(plan);
+
+        // Analyze Bass Range (Bins 1-4 cover approx 40Hz - 170Hz)
+        double current_bass_energy = 0;
+        for (int i = 1; i <= 4; i++) {
+            double mag = sqrt(out[i][0] * out[i][0] + out[i][1] * out[i][1]);
+            current_bass_energy += mag;
+        }
+        current_bass_energy /= 4.0;
+
+        // Calculate Moving Average
+        double avg_bass_energy = 0;
+        if (!history.empty()) {
+            for (double val : history) avg_bass_energy += val;
+            avg_bass_energy /= history.size();
+        }
+
+        // Trigger Logic: Spike must be > average * sensitivity
+        if (current_bass_energy > (avg_bass_energy * sensitivity) && current_bass_energy > 1000) {
+            matrix->Fill(255, 255, 255); 
+        } else {
             matrix->Fill(0, 0, 0);
         }
 
+        // Update History
+        history.push_back(current_bass_energy);
+        if (history.size() > history_limit) history.pop_front();
     }
 
-    if (matrix == NULL)
-        return 1;
-
+    // Cleanup
     matrix->Clear();
     delete matrix;
+    fftw_destroy_plan(plan);
+    fftw_free(in);
+    fftw_free(out);
+    snd_pcm_close(pcm_handle);
     return 0;
 }
