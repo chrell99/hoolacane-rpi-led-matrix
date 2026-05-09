@@ -36,22 +36,24 @@ static int usage(const char *progname) {
           "\t-C <r,g,b>        : Text Color (default 255,255,255)\n"
           "\t-y <y-origin>     : Y-Offset\n"
           "\t-B <brightness>   : Sets max brightness (0-100, default 100)\n"
-          "\t-e                : Enable blink celebration for the winner\n");
+          "\t-e                : Enable blink celebration\n"
+          "\t-d                : Debug mode (prints speed to console)\n");
   return 1;
 }
 
-static bool parseColor(Color *c, const char *str) {
-  return sscanf(str, "%hhu,%hhu,%hhu", &c->r, &c->g, &c->b) == 3;
+// Helper to calculate text width for centering
+int GetTextWidth(const rgb_matrix::Font &font, const std::string &text, int spacing) {
+  int width = 0;
+  for (char c : text) {
+    width += font.CharacterWidth(c) + spacing;
+  }
+  return width;
 }
 
 int main(int argc, char *argv[]) {
-  // --- 1. Hardcoded Matrix Options ---
   RGBMatrix::Options options;
   options.hardware_mapping = "regular";
-  options.rows = 32; 
-  options.cols = 32; 
-  options.chain_length = 3; 
-  options.parallel = 3;
+  options.rows = 32; options.cols = 32; options.chain_length = 3; options.parallel = 3;
   options.show_refresh_rate = false;
   options.multiplexing = 1;
   options.pixel_mapper_config = "Rotate:270";
@@ -59,7 +61,6 @@ int main(int argc, char *argv[]) {
   rgb_matrix::RuntimeOptions rOptions;
   rOptions.gpio_slowdown = 2;
 
-  // --- 2. Default Values ---
   Color color(255, 255, 255);
   Color bg_color(0, 0, 0);
   const char *bdf_font_file = NULL;
@@ -71,10 +72,10 @@ int main(int argc, char *argv[]) {
   int letter_spacing = 0;
   int max_brightness = 100;
   bool do_blink = false;
+  bool debug_mode = false;
 
-  // --- 3. Parse Flags ---
   int opt;
-  while ((opt = getopt(argc, argv, "f:i:s:F:m:C:y:t:B:e")) != -1) {
+  while ((opt = getopt(argc, argv, "f:i:s:F:m:C:y:t:B:ed")) != -1) {
     switch (opt) {
       case 'f': bdf_font_file = strdup(optarg); break;
       case 'i': input_file = strdup(optarg); break;
@@ -83,16 +84,19 @@ int main(int argc, char *argv[]) {
       case 'm': min_speed = atof(optarg); break;
       case 'y': y_orig = atoi(optarg); break;
       case 't': letter_spacing = atoi(optarg); break;
-      case 'C': parseColor(&color, optarg); break;
+      case 'C': {
+        sscanf(optarg, "%hhu,%hhu,%hhu", &color.r, &color.g, &color.b);
+        break;
+      }
       case 'B': max_brightness = atoi(optarg); break;
-      case 'e': do_blink = true; break; // Enable blink celebration
+      case 'e': do_blink = true; break;
+      case 'd': debug_mode = true; break;
       default: return usage(argv[0]);
     }
   }
 
   if (bdf_font_file == NULL) return usage(argv[0]);
 
-  // --- 4. Initialize ---
   rgb_matrix::Font font;
   if (!font.LoadFont(bdf_font_file)) return 1;
 
@@ -109,10 +113,7 @@ int main(int argc, char *argv[]) {
     for (int i = optind; i < argc; ++i) names.push_back(argv[i]);
   }
 
-  if (names.empty()) {
-    fprintf(stderr, "No names provided!\n");
-    return 1;
-  }
+  if (names.empty()) return 1;
 
   std::random_device rd;
   std::mt19937 g(rd());
@@ -122,60 +123,56 @@ int main(int argc, char *argv[]) {
   signal(SIGTERM, InterruptHandler);
   signal(SIGINT, InterruptHandler);
 
-  float current_speed = speed; 
-  float x_pos = matrix->width();
+  float current_speed = speed;
   int name_idx = 0;
   bool finished = false;
   uint32_t frame_count = 0;
 
-  // --- 5. Main Loop ---
+  // Initial centering for the first name
+  int text_width = GetTextWidth(font, names[name_idx], letter_spacing);
+  float x_pos = (matrix->width() - text_width) / 2.0f;
+
   while (!interrupt_received) {
     offscreen_canvas->Fill(bg_color.r, bg_color.g, bg_color.b);
-    const std::string& current_name = names[name_idx];
-
-    // Only draw if we aren't "blinking out"
-    bool should_draw = true;
-    if (finished && do_blink) {
-      // Toggle visibility every 20 frames (~200ms at 10000us sleep)
-      if ((frame_count / 20) % 2 == 0) {
-        should_draw = false;
-      }
-    }
-
-    if (should_draw) {
+    
+    if (!(finished && do_blink && (frame_count / 20) % 2 == 0)) {
       rgb_matrix::DrawText(offscreen_canvas, font,
                            (int)x_pos, y_orig + font.baseline(),
                            color, NULL,
-                           current_name.c_str(), letter_spacing);
+                           names[name_idx].c_str(), letter_spacing);
     }
 
-    // Physics
     if (!finished) {
       x_pos -= current_speed;
 
-      int length = font.CharacterWidth('W') * current_name.length(); // Rough approx for reset
-      // Calculate actual length for more precise reset
-      length = 0;
-      for (char c : current_name) {
-          length += font.CharacterWidth(c) + letter_spacing;
+      if (debug_mode && frame_count % 10 == 0) {
+        printf("Current Speed: %.4f | Current Name: %s\n", current_speed, names[name_idx].c_str());
       }
 
-      if (x_pos + length < 0) {
-        x_pos = matrix->width();
+      int current_width = GetTextWidth(font, names[name_idx], letter_spacing);
+      
+      // When name disappears, pick next and center it
+      if (x_pos + current_width < 0) {
         name_idx = (name_idx + 1) % names.size();
+        int next_width = GetTextWidth(font, names[name_idx], letter_spacing);
+        
+        // Start from the right side, but use centering logic for the eventual stop
+        x_pos = matrix->width(); 
         
         if (current_speed > min_speed) {
-            current_speed *= friction;
+          current_speed *= friction;
         } else {
-            current_speed = 0;
-            finished = true;
-            printf("Winner: %s\n", names[name_idx].c_str());
+          current_speed = 0;
+          finished = true;
+          // Final Snap to Center
+          x_pos = (matrix->width() - next_width) / 2.0f;
+          printf("WINNER: %s\n", names[name_idx].c_str());
         }
       }
     }
 
     offscreen_canvas = matrix->SwapOnVSync(offscreen_canvas);
-    usleep(10000); 
+    usleep(10000);
     frame_count++;
   }
 

@@ -2,6 +2,11 @@
 
 The purpose of this project is to utilize the existing library and slighty modify it, to fit the needs for the project "Hoolacane LED sign". The original README.md can be found in the original repository, while this repository's README will only focus on the parts necessary for the project in question.
 
+Important to note is that all custom programs made, are made specifically for the led matrix used in this project. This means all the source files include the following flags hardcoded in the .cc file:
+```
+--led-chain=3 --led-parallel=3 --led-slowdown-gpio=2 --led-multiplexing=1
+``` 
+
 Some, seemingly unrelated code/commands will also be included here, since it is for a specific usecase, but it can be applied to other uses.
 
 ## Getting started
