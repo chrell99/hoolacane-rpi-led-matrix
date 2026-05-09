@@ -34,14 +34,12 @@ static int usage(const char *progname) {
           "\t-F <friction>     : Speed multiplier (0.900-0.999, default 0.992)\n"
           "\t-m <min-speed>    : Threshold to stop scrolling (default 0.1)\n"
           "\t-C <r,g,b>        : Text Color (default 255,255,255)\n"
-          "\t-y <y-origin>     : Y-Offset\n"
           "\t-B <brightness>   : Sets max brightness (0-100, default 100)\n"
           "\t-e                : Enable blink celebration\n"
-          "\t-d                : Debug mode (prints speed to console)\n");
+          "\t-d                : Debug mode (updates speed on one line)\n");
   return 1;
 }
 
-// Helper to calculate text width for centering
 int GetTextWidth(const rgb_matrix::Font &font, const std::string &text, int spacing) {
   int width = 0;
   for (char c : text) {
@@ -51,6 +49,7 @@ int GetTextWidth(const rgb_matrix::Font &font, const std::string &text, int spac
 }
 
 int main(int argc, char *argv[]) {
+  // Hardcoded Matrix Options
   RGBMatrix::Options options;
   options.hardware_mapping = "regular";
   options.rows = 32; options.cols = 32; options.chain_length = 3; options.parallel = 3;
@@ -68,26 +67,21 @@ int main(int argc, char *argv[]) {
   float speed = 7.0f;
   float friction = 0.992f;
   float min_speed = 0.1f;
-  int y_orig = 0;
   int letter_spacing = 0;
   int max_brightness = 100;
   bool do_blink = false;
   bool debug_mode = false;
 
   int opt;
-  while ((opt = getopt(argc, argv, "f:i:s:F:m:C:y:t:B:ed")) != -1) {
+  while ((opt = getopt(argc, argv, "f:i:s:F:m:C:t:B:ed")) != -1) {
     switch (opt) {
       case 'f': bdf_font_file = strdup(optarg); break;
       case 'i': input_file = strdup(optarg); break;
       case 's': speed = atof(optarg); break;
       case 'F': friction = atof(optarg); break;
       case 'm': min_speed = atof(optarg); break;
-      case 'y': y_orig = atoi(optarg); break;
       case 't': letter_spacing = atoi(optarg); break;
-      case 'C': {
-        sscanf(optarg, "%hhu,%hhu,%hhu", &color.r, &color.g, &color.b);
-        break;
-      }
+      case 'C': sscanf(optarg, "%hhu,%hhu,%hhu", &color.r, &color.g, &color.b); break;
       case 'B': max_brightness = atoi(optarg); break;
       case 'e': do_blink = true; break;
       case 'd': debug_mode = true; break;
@@ -104,6 +98,12 @@ int main(int argc, char *argv[]) {
   if (matrix == NULL) return 1;
   matrix->SetBrightness(max_brightness);
 
+  // Y-Axis Centering Calculation
+  // baseline() is the distance from the top of the font to the line the letters sit on.
+  // matrix->height() / 2 puts the center of the matrix. 
+  // We subtract half the font height to truly center it.
+  int y_center = (matrix->height() + font.baseline() - font.height()/2) / 2;
+
   std::vector<std::string> names;
   if (input_file) {
     std::ifstream fs(input_file);
@@ -112,7 +112,6 @@ int main(int argc, char *argv[]) {
   } else {
     for (int i = optind; i < argc; ++i) names.push_back(argv[i]);
   }
-
   if (names.empty()) return 1;
 
   std::random_device rd;
@@ -128,7 +127,7 @@ int main(int argc, char *argv[]) {
   bool finished = false;
   uint32_t frame_count = 0;
 
-  // Initial centering for the first name
+  // Initial X positioning
   int text_width = GetTextWidth(font, names[name_idx], letter_spacing);
   float x_pos = (matrix->width() - text_width) / 2.0f;
 
@@ -137,7 +136,7 @@ int main(int argc, char *argv[]) {
     
     if (!(finished && do_blink && (frame_count / 20) % 2 == 0)) {
       rgb_matrix::DrawText(offscreen_canvas, font,
-                           (int)x_pos, y_orig + font.baseline(),
+                           (int)x_pos, y_center,
                            color, NULL,
                            names[name_idx].c_str(), letter_spacing);
     }
@@ -145,18 +144,17 @@ int main(int argc, char *argv[]) {
     if (!finished) {
       x_pos -= current_speed;
 
-      if (debug_mode && frame_count % 10 == 0) {
-        printf("Current Speed: %.4f | Current Name: %s\n", current_speed, names[name_idx].c_str());
+      // Debug: Overwrite same line
+      if (debug_mode && frame_count % 5 == 0) {
+        printf("\r[DEBUG] Speed: %7.4f | Name: %-20s", current_speed, names[name_idx].c_str());
+        fflush(stdout);
       }
 
       int current_width = GetTextWidth(font, names[name_idx], letter_spacing);
       
-      // When name disappears, pick next and center it
       if (x_pos + current_width < 0) {
         name_idx = (name_idx + 1) % names.size();
         int next_width = GetTextWidth(font, names[name_idx], letter_spacing);
-        
-        // Start from the right side, but use centering logic for the eventual stop
         x_pos = matrix->width(); 
         
         if (current_speed > min_speed) {
@@ -164,9 +162,8 @@ int main(int argc, char *argv[]) {
         } else {
           current_speed = 0;
           finished = true;
-          // Final Snap to Center
           x_pos = (matrix->width() - next_width) / 2.0f;
-          printf("WINNER: %s\n", names[name_idx].c_str());
+          printf("\nWINNER: %s\n", names[name_idx].c_str());
         }
       }
     }
@@ -176,6 +173,7 @@ int main(int argc, char *argv[]) {
     frame_count++;
   }
 
+  printf("\nCleaning up and exiting...\n");
   matrix->Clear();
   delete matrix;
   return 0;
