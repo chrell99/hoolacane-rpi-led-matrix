@@ -20,6 +20,14 @@
 
 using namespace rgb_matrix;
 
+// --- Particle Structure for Fireworks ---
+struct Particle {
+  float x, y;
+  float vx, vy;
+  Color color;
+  int lifetime;
+};
+
 volatile bool interrupt_received = false;
 static void InterruptHandler(int signo) {
   interrupt_received = true;
@@ -30,13 +38,13 @@ static int usage(const char *progname) {
   fprintf(stderr, "Options:\n"
           "\t-f <font-file>    : Path to BDF font (required)\n"
           "\t-i <textfile>     : Input names from file (one per line)\n"
-          "\t-s <speed>        : Starting speed (default 7.0)\n"
-          "\t-F <friction>     : Speed multiplier (0.900-0.999, default 0.992)\n"
-          "\t-m <min-speed>    : Threshold to stop scrolling (default 0.1)\n"
+          "\t-s <speed>        : Starting speed (default 10.0)\n"
+          "\t-F <friction>     : Speed lost per name (default 0.5)\n"
+          "\t-m <min-speed>    : Threshold for the final glide (default 1.0)\n"
           "\t-C <r,g,b>        : Text Color (default 255,255,255)\n"
           "\t-B <brightness>   : Sets max brightness (0-100, default 100)\n"
-          "\t-e                : Enable blink celebration\n"
-          "\t-d                : Debug mode (updates speed on one line)\n");
+          "\t-e                : Enable blink celebration for the winner\n"
+          "\t-d                : Debug mode (in-place terminal updates)\n");
   return 1;
 }
 
@@ -49,10 +57,12 @@ int GetTextWidth(const rgb_matrix::Font &font, const std::string &text, int spac
 }
 
 int main(int argc, char *argv[]) {
-  // Hardcoded Matrix Options
   RGBMatrix::Options options;
   options.hardware_mapping = "regular";
-  options.rows = 32; options.cols = 32; options.chain_length = 3; options.parallel = 3;
+  options.rows = 32; 
+  options.cols = 32; 
+  options.chain_length = 3; 
+  options.parallel = 3;
   options.show_refresh_rate = false;
   options.multiplexing = 1;
   options.pixel_mapper_config = "Rotate:270";
@@ -64,23 +74,22 @@ int main(int argc, char *argv[]) {
   Color bg_color(0, 0, 0);
   const char *bdf_font_file = NULL;
   const char *input_file = NULL;
-  float speed = 7.0f;
-  float friction = 0.992f;
-  float min_speed = 0.1f;
+  float speed = 10.0f;
+  float friction = 0.5f;
+  float min_speed = 1.0f;
   int letter_spacing = 0;
   int max_brightness = 100;
   bool do_blink = false;
   bool debug_mode = false;
 
   int opt;
-  while ((opt = getopt(argc, argv, "f:i:s:F:m:C:t:B:ed")) != -1) {
+  while ((opt = getopt(argc, argv, "f:i:s:F:m:C:B:ed")) != -1) {
     switch (opt) {
       case 'f': bdf_font_file = strdup(optarg); break;
       case 'i': input_file = strdup(optarg); break;
       case 's': speed = atof(optarg); break;
       case 'F': friction = atof(optarg); break;
       case 'm': min_speed = atof(optarg); break;
-      case 't': letter_spacing = atoi(optarg); break;
       case 'C': sscanf(optarg, "%hhu,%hhu,%hhu", &color.r, &color.g, &color.b); break;
       case 'B': max_brightness = atoi(optarg); break;
       case 'e': do_blink = true; break;
@@ -97,12 +106,6 @@ int main(int argc, char *argv[]) {
   RGBMatrix *matrix = RGBMatrix::CreateFromOptions(options, rOptions);
   if (matrix == NULL) return 1;
   matrix->SetBrightness(max_brightness);
-
-  // Y-Axis Centering Calculation
-  // baseline() is the distance from the top of the font to the line the letters sit on.
-  // matrix->height() / 2 puts the center of the matrix. 
-  // We subtract half the font height to truly center it.
-  int y_center = (matrix->height() + font.baseline() - font.height()/2) / 2;
 
   std::vector<std::string> names;
   if (input_file) {
@@ -125,45 +128,86 @@ int main(int argc, char *argv[]) {
   float current_speed = speed;
   int name_idx = 0;
   bool finished = false;
+  bool slowing_down_to_stop = false; 
   uint32_t frame_count = 0;
+  std::vector<Particle> particles;
 
-  // Initial X positioning
-  int text_width = GetTextWidth(font, names[name_idx], letter_spacing);
-  float x_pos = (matrix->width() - text_width) / 2.0f;
+  int y_center = (matrix->height() + font.baseline() - font.height()/2) / 2;
+  float x_pos = matrix->width();
 
   while (!interrupt_received) {
     offscreen_canvas->Fill(bg_color.r, bg_color.g, bg_color.b);
     
-    if (!(finished && do_blink && (frame_count / 20) % 2 == 0)) {
+    // --- FIREWORKS LOGIC (Background) ---
+    if (finished && do_blink) {
+      // Spawn new burst occasionally
+      if (rand() % 12 == 0) {
+        int burst_x = rand() % matrix->width();
+        int burst_y = rand() % matrix->height();
+        Color p_color(rand()%255, rand()%255, rand()%255);
+        for (int i = 0; i < 15; ++i) {
+          float angle = (rand() % 360) * M_PI / 180.0;
+          float mag = (rand() % 100) / 40.0f;
+          particles.push_back({(float)burst_x, (float)burst_y, cosf(angle)*mag, sinf(angle)*mag, p_color, 25 + rand()%15});
+        }
+      }
+
+      // Update and Draw Particles
+      for (auto it = particles.begin(); it != particles.end(); ) {
+        it->x += it->vx;
+        it->y += it->vy;
+        it->vy += 0.06f; // Gravity
+        it->lifetime--;
+        if (it->lifetime <= 0) {
+          it = particles.erase(it);
+        } else {
+          if (it->x >= 0 && it->x < matrix->width() && it->y >= 0 && it->y < matrix->height()) {
+            offscreen_canvas->SetPixel((int)it->x, (int)it->y, it->color.r, it->color.g, it->color.b);
+          }
+          ++it;
+        }
+      }
+    }
+
+    // --- TEXT LOGIC (Foreground) ---
+    const std::string& current_name = names[name_idx];
+    int current_width = GetTextWidth(font, current_name, letter_spacing);
+    int target_center_x = (matrix->width() - current_width) / 2;
+
+    bool visibility = true;
+    if (finished && do_blink && (frame_count / 20) % 2 == 0) visibility = false;
+
+    if (visibility) {
       rgb_matrix::DrawText(offscreen_canvas, font,
                            (int)x_pos, y_center,
                            color, NULL,
-                           names[name_idx].c_str(), letter_spacing);
+                           current_name.c_str(), letter_spacing);
     }
 
+    // --- PHYSICS ---
     if (!finished) {
       x_pos -= current_speed;
-
-      // Debug: Overwrite same line
       if (debug_mode && frame_count % 5 == 0) {
-        printf("\r[DEBUG] Speed: %7.4f | Name: %-20s", current_speed, names[name_idx].c_str());
+        printf("\r[DEBUG] Speed: %7.4f | Current: %-20s", current_speed, current_name.c_str());
         fflush(stdout);
       }
 
-      int current_width = GetTextWidth(font, names[name_idx], letter_spacing);
-      
-      if (x_pos + current_width < 0) {
-        name_idx = (name_idx + 1) % names.size();
-        int next_width = GetTextWidth(font, names[name_idx], letter_spacing);
-        x_pos = matrix->width(); 
-        
-        if (current_speed > min_speed) {
-          current_speed *= friction;
-        } else {
+      if (slowing_down_to_stop) {
+        if (x_pos <= target_center_x) {
+          x_pos = target_center_x;
           current_speed = 0;
           finished = true;
-          x_pos = (matrix->width() - next_width) / 2.0f;
-          printf("\nWINNER: %s\n", names[name_idx].c_str());
+          printf("\nWINNER: %s\n", current_name.c_str());
+        }
+      } else {
+        if (x_pos + current_width < 0) {
+          x_pos = matrix->width();
+          name_idx = (name_idx + 1) % names.size();
+          if (current_speed > min_speed) current_speed -= friction;
+          if (current_speed <= min_speed) {
+            current_speed = min_speed;
+            slowing_down_to_stop = true;
+          }
         }
       }
     }
@@ -173,7 +217,6 @@ int main(int argc, char *argv[]) {
     frame_count++;
   }
 
-  printf("\nCleaning up and exiting...\n");
   matrix->Clear();
   delete matrix;
   return 0;
