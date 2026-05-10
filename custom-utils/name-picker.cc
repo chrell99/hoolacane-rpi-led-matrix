@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 #include <random>
+#include <sstream>
 
 #include <getopt.h>
 #include <math.h>
@@ -34,11 +35,11 @@ static void InterruptHandler(int signo) {
 }
 
 static int usage(const char *progname) {
-  fprintf(stderr, "usage: %s [options] [<names...> | -i <filename>]\n", progname);
+  fprintf(stderr, "usage: %s [options] [<names...>]\n", progname);
   fprintf(stderr, "Options:\n"
           "\t-f <font-file>    : Path to primary BDF font (required)\n"
           "\t-g <font-file>    : Path to secondary BDF font (required if -T or -L used)\n"
-          "\t-i <textfile>     : Input names from file\n"
+          "\t-i <name-string>  : Input names as comma-separated string (e.g. \"Name1,Name2\")\n"
           "\t-s <speed>        : Starting speed (default 10.0)\n"
           "\t-F <friction>     : Speed lost per name (default 0.5)\n"
           "\t-m <min-speed>    : Threshold for the final glide (default 1.0)\n"
@@ -50,6 +51,7 @@ static int usage(const char *progname) {
           "\t-U <speed>        : Top scroller speed (default 2.0)\n"
           "\t-L <text>         : Bottom repeating scroller text\n"
           "\t-V <speed>        : Bottom scroller speed (default 2.0)\n"
+          "\t-G <gap>          : Gap between repeating text (default 30)\n"
           "\t-W                : Only show scrollers after winner found\n");
   return 1;
 }
@@ -62,11 +64,10 @@ int GetTextWidth(const rgb_matrix::Font &font, const std::string &text, int spac
 
 void DrawRepeatingScroller(FrameCanvas *canvas, const rgb_matrix::Font &font, 
                            const std::string &text, float &x_pos, float speed, 
-                           int y, Color c, int letter_spacing, int matrix_width) {
+                           int y, Color c, int letter_spacing, int matrix_width, int gap) {
   if (text.empty()) return;
 
   int text_width = GetTextWidth(font, text, letter_spacing);
-  int gap = 30; 
   int total_segment_width = text_width + gap;
 
   x_pos -= speed;
@@ -95,21 +96,22 @@ int main(int argc, char *argv[]) {
   Color color(255, 255, 255);
   const char *bdf_font_file = NULL;
   const char *sec_font_file = NULL;
-  const char *input_file = NULL;
+  const char *name_input_str = NULL;
   float speed = 10.0f, friction = 0.5f, min_speed = 1.0f;
   int max_brightness = 100;
   bool do_blink = false, debug_mode = false;
 
   std::string top_text = "", bottom_text = "";
   float top_speed = 2.0f, bottom_speed = 2.0f;
+  int scroller_gap = 30;
   bool scrollers_after_win = false;
 
   int opt;
-  while ((opt = getopt(argc, argv, "f:g:i:s:F:m:C:B:edT:U:L:V:W")) != -1) {
+  while ((opt = getopt(argc, argv, "f:g:i:s:F:m:C:B:edT:U:L:V:WG:")) != -1) {
     switch (opt) {
       case 'f': bdf_font_file = strdup(optarg); break;
       case 'g': sec_font_file = strdup(optarg); break;
-      case 'i': input_file = strdup(optarg); break;
+      case 'i': name_input_str = optarg; break;
       case 's': speed = atof(optarg); break;
       case 'F': friction = atof(optarg); break;
       case 'm': min_speed = atof(optarg); break;
@@ -121,12 +123,12 @@ int main(int argc, char *argv[]) {
       case 'U': top_speed = atof(optarg); break;
       case 'L': bottom_text = optarg; break;
       case 'V': bottom_speed = atof(optarg); break;
+      case 'G': scroller_gap = atoi(optarg); break;
       case 'W': scrollers_after_win = true; break;
       default: return usage(argv[0]);
     }
   }
 
-  // Verification: If scroller text exists, secondary font is required
   if (bdf_font_file == NULL) return usage(argv[0]);
   if ((!top_text.empty() || !bottom_text.empty()) && sec_font_file == NULL) {
     fprintf(stderr, "Error: Secondary font (-g) is required when using scroller text (-T or -L).\n");
@@ -143,15 +145,22 @@ int main(int argc, char *argv[]) {
   if (matrix == NULL) return 1;
   matrix->SetBrightness(max_brightness);
 
+  // --- NAME PARSING ---
   std::vector<std::string> names;
-  if (input_file) {
-    std::ifstream fs(input_file);
-    std::string n;
-    while (std::getline(fs, n)) { if (!n.empty()) names.push_back(n); }
+  if (name_input_str) {
+    std::stringstream ss(name_input_str);
+    std::string segment;
+    while (std::getline(ss, segment, ',')) {
+      if (!segment.empty()) names.push_back(segment);
+    }
   } else {
     for (int i = optind; i < argc; ++i) names.push_back(argv[i]);
   }
-  if (names.empty()) return 1;
+  
+  if (names.empty()) {
+    fprintf(stderr, "Error: No names provided via -i or arguments.\n");
+    return 1;
+  }
 
   std::random_device rd;
   std::mt19937 g(rd());
@@ -168,7 +177,6 @@ int main(int argc, char *argv[]) {
   uint32_t frame_count = 0;
   std::vector<Particle> particles;
 
-  // Positioning logic
   int y_center = (matrix->height() + main_font.baseline() - main_font.height()/2) / 2;
   int y_top = (sec_font_file) ? sec_font.baseline() : 0;
   int y_bottom = matrix->height() - 1;
@@ -176,7 +184,7 @@ int main(int argc, char *argv[]) {
   while (!interrupt_received) {
     offscreen_canvas->Fill(0, 0, 0);
     
-    if (finished && do_blink) {
+    if (finished) {
       if (rand() % 12 == 0) {
         int bx = rand() % matrix->width(), by = rand() % matrix->height();
         Color pc(rand()%255, rand()%255, rand()%255);
@@ -201,8 +209,8 @@ int main(int argc, char *argv[]) {
 
     bool show_scrollers = !scrollers_after_win || (scrollers_after_win && finished);
     if (show_scrollers && sec_font_file) {
-      DrawRepeatingScroller(offscreen_canvas, sec_font, top_text, top_x, top_speed, y_top, color, 0, matrix->width());
-      DrawRepeatingScroller(offscreen_canvas, sec_font, bottom_text, bottom_x, bottom_speed, y_bottom, color, 0, matrix->width());
+      DrawRepeatingScroller(offscreen_canvas, sec_font, top_text, top_x, top_speed, y_top, color, 0, matrix->width(), scroller_gap);
+      DrawRepeatingScroller(offscreen_canvas, sec_font, bottom_text, bottom_x, bottom_speed, y_bottom, color, 0, matrix->width(), scroller_gap);
     }
 
     const std::string& current_name = names[name_idx];
@@ -231,10 +239,7 @@ int main(int argc, char *argv[]) {
           main_x = matrix->width();
           name_idx = (name_idx + 1) % names.size();
           if (current_speed > min_speed) current_speed -= friction;
-          if (current_speed <= min_speed) { 
-            current_speed = min_speed; 
-            slowing_down_to_stop = true; 
-          }
+          if (current_speed <= min_speed) { current_speed = min_speed; slowing_down_to_stop = true; }
         }
       }
     }
