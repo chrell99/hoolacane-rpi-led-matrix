@@ -184,7 +184,7 @@ int main(int argc, char *argv[]) {
   while (!interrupt_received) {
     offscreen_canvas->Fill(0, 0, 0);
     
-    if (finished) {
+    if (finished && do_blink) {
       if (rand() % 12 == 0) {
         int bx = rand() % matrix->width(), by = rand() % matrix->height();
         Color pc(rand()%255, rand()%255, rand()%255);
